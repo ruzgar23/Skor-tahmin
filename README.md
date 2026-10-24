@@ -36,7 +36,7 @@ Veri kaynakları: [football-data.co.uk](https://football-data.co.uk) (sonuçlar,
 
 | Değişken | Ne işe yarar |
 |---|---|
-| `SITE_URL` | Mesajlardaki sayfa linki, örn. `https://kullaniciadin.github.io/skor-tahmin` |
+| `SITE_URL` | Mesajlardaki sayfa linki. Boş bırakılırsa GitHub Pages adresi otomatik kullanılır |
 | `TELEGRAM_CHAT_ID` | Ek alıcılar, virgülle ayrılmış. Örn. herkese açık bir kanal: `@kanaladi` (botu kanala yönetici olarak ekle) |
 
 Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listesi depoda değil, Actions önbelleğinde tutulur.

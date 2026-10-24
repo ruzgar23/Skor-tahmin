@@ -4,7 +4,19 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 IST = ZoneInfo("Europe/Istanbul")
-SITE_URL = os.environ.get("SITE_URL", "").rstrip("/")
+def _site_url():
+    """SITE_URL değişkeni yoksa GitHub Pages adresini depo adından üretir."""
+    u = os.environ.get("SITE_URL", "").strip()
+    if u:
+        return u.rstrip("/")
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if "/" in repo:
+        owner, name = repo.split("/", 1)
+        return f"https://{owner.lower()}.github.io/{name}"
+    return ""
+
+
+SITE_URL = _site_url()
 
 TR = {"Besiktas": "Beşiktaş", "Fenerbahce": "Fenerbahçe", "Goztep": "Göztepe", "Buyuksehyr": "Başakşehir",
       "Corum": "Çorum", "Eyupspor": "Eyüpspor", "Genclerbirligi": "Gençlerbirliği", "Kasimpasa": "Kasımpaşa",
