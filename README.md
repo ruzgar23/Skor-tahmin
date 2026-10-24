@@ -48,7 +48,7 @@ Veri kaynakları: [football-data.co.uk](https://football-data.co.uk) (sonuçlar,
 2. **Telegram botu oluştur:** Telegram'da [@BotFather](https://t.me/BotFather)'a `/newbot` yaz, ad ver ve verdiği token'ı kopyala.
 3. **Token'ı gizli olarak ekle:** Deponda **Settings → Secrets and variables → Actions → New repository secret**. Ad: `TELEGRAM_TOKEN`, değer: token. Token koda ya da sayfaya hiçbir zaman yazılmaz.
 4. **Sayfayı aç:** **Settings → Pages → Branch: `gh-pages` / `(root)` → Save.** `gh-pages` dalı ilk çalışmadan sonra oluşur; listede yoksa 5. adımdan sonra tekrar bak.
-5. **Otomasyonu başlat:** **Actions** sekmesinde iş akışlarını etkinleştir, sonra **Sabah taraması → Run workflow** ile ilk çalışmayı başlat.
+5. **Otomasyonu başlat:** **Actions** sekmesinde iş akışlarını etkinleştir, sonra **Bot → Run workflow** ile ilk çalışmayı başlat. Bundan sonra bot kendini sürekli yeniden başlatır.
 6. **Botuna yaz:** Telegram'da botunu aç ve `/start` gönder. Komutlara birkaç dakika içinde cevap gelir; sabah mesajları ertesi gün başlar.
 
 İsteğe bağlı ayarlar (**Settings → Secrets and variables → Actions → Variables**):
@@ -65,10 +65,10 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
 - `engine/`: model ve veri (`engine.py` gol modeli, `scan.py` tarama, `espn.py` fikstür ve canlı veri, `live.py` canlı analiz, `corners.py` kart ve korner, `nba.py` basketbol)
 - `bot/`: Telegram botu (`run.py` giriş noktası, `core.py` öneri ve mesaj biçimleri, `extra.py` kupon, kart, basketbol ve oran hareketi, `tg.py` Telegram API)
 - `site/`: web sayfası (`gh-pages` dalına veriyle birlikte yayınlanır; bahis defteri yalnızca ziyaretçinin tarayıcısında saklanır)
-- `.github/workflows/`: sabah taraması, canlı takip, bot komutları
+- `.github/workflows/bot.yml`: tek sürekli iş. Komutları dinler, canlı takip yapar, sabah taramasını çalıştırır; ~55 dakikada bir kendini yeniden başlatır
 
 ## Notlar
 
-- GitHub'ın zamanlanmış çalışmaları yoğun saatlerde birkaç dakika gecikebilir. Canlı takip bu yüzden kendi içinde 5 dakikada bir kontrol eden bir döngü olarak çalışır.
-- Herkese açık depolarda Actions süresi ücretsizdir. Gizli bir depoda aylık ücretsiz süre canlı takibe yetmeyebilir; o durumda `live.yml` içindeki `LIVE_EVERY_SEC` değerini `600` yap.
+- GitHub'ın zamanlanmış çalışmaları saatlerce gecikebildiği için bot zamanlayıcıya güvenmez: her çalıştırma sonunda bir sonrakini kendisi başlatır. Zamanlayıcı (30 dakikada bir) yalnızca zincir koparsa devreye girer.
+- Herkese açık depolarda Actions süresi ücretsizdir. Bot sürekli çalıştığı için gizli bir depoda aylık ücretsiz süre yetmez; depoyu herkese açık tut.
 - Bir iş başarısız olursa Actions sekmesinde kırmızı görünür. Telegram'a mesaj gelmiyorsa önce oraya bak.

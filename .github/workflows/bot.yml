@@ -1,0 +1,53 @@
+name: Bot
+# Tek sürekli iş: Telegram komutlarına birkaç saniyede cevap verir, maç varken 5 dakikada bir canlı kontrol yapar,
+# her sabah 09:30'da (Türkiye) günün seçimlerini gönderir ve gün içinde verileri tazeler.
+# Her çalıştırma ~55 dakika sürer ve sonunda bir sonrakini kendisi başlatır (zincir).
+# Zamanlayıcı yalnızca yedektir: zincir bir sebeple koparsa en geç 30 dakikada yeniden başlar.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: bot
+  cancel-in-progress: false
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+      SITE_URL: ${{ vars.SITE_URL }}
+      BOT_SECONDS: "3300"
+      LIVE_EVERY_SEC: "300"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: İş durumunu geri yükle
+        uses: actions/cache/restore@v4
+        with: { path: state/run, key: "run-${{ github.run_id }}", restore-keys: "run-" }
+      - name: football-data önbelleğini geri yükle
+        uses: actions/cache/restore@v4
+        with: { path: fd, key: "fd-${{ github.run_id }}", restore-keys: "fd-" }
+      - id: run
+        continue-on-error: true
+        run: python bot/run.py bot
+      - if: always()
+        uses: actions/cache/save@v4
+        with: { path: state/subs, key: "subs-${{ github.run_id }}" }
+      - if: always()
+        uses: actions/cache/save@v4
+        with: { path: state/run, key: "run-${{ github.run_id }}" }
+      - if: always()
+        uses: actions/cache/save@v4
+        with: { path: fd, key: "fd-${{ github.run_id }}" }
+      - name: Sonraki çalıştırmayı başlat
+        # Yalnızca iş gerçekten çalıştıysa (hemen çöken bir iş kendini sonsuza dek yeniden başlatmasın)
+        if: always() && steps.run.outputs.long == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run bot.yml --ref "${GITHUB_REF_NAME}"

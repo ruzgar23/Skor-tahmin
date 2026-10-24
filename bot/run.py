@@ -220,7 +220,10 @@ def handle_commands(st, wait=0):
 
 # ---------- modlar ----------
 def daily():
-    st = load_state()
+    st = load_state(); daily_body(st); save_state(st)
+
+
+def daily_body(st):
     tg.set_commands(core.COMMANDS)
     me = tg.call("getMe")
     if me.get("ok"):
@@ -241,7 +244,6 @@ def daily():
                        caption="Bugünün tüm maçları (futbol + basketbol). Ayrıntı için /mac takım", silent=True)
         st["sent"]["daily"] = str(today)
     check_moves(st)
-    save_state(st)
 
 
 def check_moves(st):
@@ -258,6 +260,24 @@ def upcoming_soon(data, minutes=25):
     now = datetime.now(timezone.utc)
     return any(now - timedelta(minutes=110) < datetime.fromisoformat(m["ko"]) < now + timedelta(minutes=minutes)
                for m in data.get("matches", []))
+
+
+def live_tick(st):
+    """Bir canlı kontrol: canlı analiz, uyarılar, live.json yayını. Dönüş: canlı maç sayısı."""
+    import live as L
+    lj = os.path.join(SITE, "live.json")
+    L.main(os.path.join(SITE, "data.json"), lj, lj if os.path.exists(lj) else None)
+    lv = jload("live.json", {"matches": [], "alerts": []})
+    by_id = {m["id"]: m for m in lv["matches"]}
+    alerts = []
+    for a in lv.get("alerts", []):
+        m = by_id.get(a["id"])
+        pk = next((p for p in (m or {}).get("picks", []) if p["k"] == a["k"]), None)
+        if m and pk: alerts.append((m, pk))
+    if alerts:
+        broadcast_rich(st, imgs_or(visual.live_images, alerts[:8]), core.live_alert_message(alerts[:8]))
+    publish("Canlı güncelleme", ["live.json"])
+    return len(lv["matches"])
 
 
 def live():
@@ -317,5 +337,45 @@ def commands():
     _save(SUBS_FILE, subs)
 
 
+BOT_SECONDS = int(os.environ.get("BOT_SECONDS", "3300"))
+MORNING = (9, 30)
+
+
+def bot():
+    """Tek sürekli iş: komutları dinler, maç varken 5 dakikada bir canlı kontrol yapar, sabah taramasını
+    zamanında çalıştırır, gün içinde 2 saatte bir verileri tazeler. ~55 dakika sonra biter; iş akışı
+    bir sonrakini kendisi başlatır."""
+    subs = _load(SUBS_FILE, {"offset": 0, "subs": {}}); subs.setdefault("offset", 0); subs.setdefault("subs", {})
+    st = load_state(); st["subs"] = subs["subs"]  # yeni aboneler hemen bildirim alır
+    start = time.time(); last_live = 0.0; live_active = True
+    while time.time() - start < BOT_SECONDS:
+        try:
+            now = now_ist(); today = now.date()
+            data = jload("data.json", {"matches": []})
+            gen = datetime.fromisoformat(data["generated"]) if data.get("generated") else None
+            if (now.hour, now.minute) >= MORNING and st["sent"].get("daily") != str(today):
+                daily_body(st); save_state(st)
+            elif not gen or datetime.now(timezone.utc) - gen > timedelta(hours=2):
+                scan(); publish("Veri tazeleme", SITE_FILES_DAILY); check_moves(st); save_state(st)
+            if time.time() - last_live >= LOOP_EVERY:
+                last_live = time.time()
+                if live_active or upcoming_soon(jload("data.json", {"matches": []})):
+                    live_active = live_tick(st) > 0
+                    save_state(st)
+        except Exception:
+            traceback.print_exc()
+        left = BOT_SECONDS - (time.time() - start)
+        wait = int(max(1, min(50, LOOP_EVERY - (time.time() - last_live), left - 5)))
+        try:
+            if handle_commands(subs, wait=wait):
+                _save(SUBS_FILE, subs)
+        except Exception:
+            traceback.print_exc(); time.sleep(5)
+    _save(SUBS_FILE, subs); save_state(st)
+    out = os.environ.get("GITHUB_OUTPUT")
+    if out and time.time() - start > 120:
+        open(out, "a").write("long=1\n")
+
+
 if __name__ == "__main__":
-    {"daily": daily, "live": live, "commands": commands}[sys.argv[1]]()
+    {"daily": daily, "live": live, "commands": commands, "bot": bot}[sys.argv[1]]()
