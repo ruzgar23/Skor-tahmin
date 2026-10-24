@@ -62,7 +62,7 @@ def daily_images(data, basket, day, per_page=8):
     for k, pg in enumerate(pages, 1):
         sub = f"{tr_date(day)} · {total} seçim" + (f" · sayfa {k}/{len(pages)}" if len(pages) > 1 else "")
         out.append(cards.daily_card("GÜNÜN SEÇİMLERİ", sub, pg,
-                   ("İddaa oranı kartta yazan sınırın altındaysa o maçı geç. Tekli oyna, her bahse kasanın küçük ve aynı bir payını (örn. %2) koy.",
+                   ("İddaa oranı kartta yazan sınırın altındaysa o maçı geç. Tekli oyna; 1 birim = kasanın %2'si. Maçtan ~1 saat önce gelen teyit mesajında İPTAL yazanı oynama.",
                     "Olasılıklar garanti değildir; %70'lik seçim de 10 maçın 3'ünde yatar.")))
     return out
 
@@ -72,8 +72,9 @@ def how_to():
             "1️⃣ Karttaki maçı iddaa'da bul, <b>OYNA</b> yazan seçime bak.\n"
             "2️⃣ İddaa'nın oranını karttaki <b>≥ oran</b> ile karşılaştır.\n"
             "3️⃣ İddaa oranı <b>eşit ya da yüksekse</b> oyna; düşükse o maçı geç.\n"
-            "4️⃣ Tekli oyna, her bahse kasanın küçük ve aynı bir payını koy (örn. %2).\n"
-            "★★★ Güçlü: testte %74–80 tuttu · ★★☆ Orta: %63–67 tuttu\n"
+            "4️⃣ Tekli oyna. 1 birim = kasanın %2'si: Güçlü 1 birim, Orta ½ birim.\n"
+            "5️⃣ Maçtan ~1 saat önce <b>teyit</b> mesajı gelir; ⛔ OYNAMA yazanı oynama.\n"
+            "★★★ Güçlü: testte %80 tuttu · ★★☆ Orta: %65 tuttu (teyitle %81 / %66)\n"
             "Ayrıntı: /mac takım · kupon kontrolü: /kupon")
 
 
@@ -88,7 +89,7 @@ def daily_text(data, basket, day):
         for r in rows:
             star = "★★★" if r["tier"] == 3 else "★★☆"
             out.append(f"{r['time']} {core.e(r['home'])} – {core.e(r['away'])}\n"
-                       f"   👉 <b>{core.e(r['pick'])}</b> · %{round(r['prob']*100)} · oran ≥ <b>{core.odds_fmt(r['min_odds'])}</b> {star}")
+                       f"   👉 <b>{core.e(r['pick'])}</b> · %{round(r['prob']*100)} · oran ≥ <b>{core.odds_fmt(r['min_odds'])}</b> {star} · {core.UNIT[r['tier']]}")
     if len(out) == 1:
         out.append("Bugün belirgin bir seçim yok; zorlama.")
     return "\n".join(out) + core.link_line()
@@ -155,7 +156,7 @@ def all_matches_images(data, basket, day):
     return PG.paginate("BUGÜNÜN MAÇLARI", f"{tr_date(day)} · {n} maç (futbol + basketbol)", blocks, FOOT)
 
 
-def report_images(history, day):
+def report_images(history, day, picks=None):
     done = [h for h in history if h.get("res") and ko_local(h).date() == day]
     rows, t = [], {3: [0, 0], 2: [0, 0]}
     for h in sorted(done, key=lambda h: h["ko"]):
@@ -176,7 +177,12 @@ def report_images(history, day):
             k.append((f"{w}/{n}", f"{name} seçim tuttu (%{round(100 * w / n)})", PG.GREEN if w / n >= .6 else PG.AMBER))
     tot_n = t[3][0] + t[2][0]; tot_w = t[3][1] + t[2][1]
     k.append((f"%{round(100 * tot_w / tot_n)}", "toplam tutma oranı", PG.INK))
-    blocks = [PG.kpi_row(k), ("head", "Maç maç")] + rows
+    blocks = [PG.kpi_row(k)]
+    ts = extra.teyit_summary(picks, history, day)
+    if ts:
+        (n1, w1), (n0, w0) = ts["ok"], ts["bad"]
+        blocks.append(PG.note_row(f"Maç önü teyitli seçimler: {w1}/{n1} tuttu" + (f" · iptal edilenler: {w0}/{n0} tuttu" if n0 else ""), PG.INK, 56))
+    blocks += [("head", "Maç maç")] + rows
     return PG.paginate("DÜNÜN KARNESİ", tr_date(day), blocks, ("Tek günlük sonuç şansa çok bağlıdır; asıl ölçü uzun dönem test.",))
 
 
@@ -251,3 +257,14 @@ def basket_match_images(basket, q):
         blocks.append(PG.note_row("Toplam sayı üst: " + " · ".join(f"{k.replace('.', ',')} %{round(v*100)}" for k, v in p["tot"].items()), PG.INK))
     return PG.paginate(f"{_short(g['home']).upper()} – {_short(g['away']).upper()}", f"{g['lg']} · {tr_date(ko_local(g).date())}", blocks,
                        ("Handikap ve alt/üst çizgileri ~%50'dir; bu marketlerde öneri verilmez.",))
+
+
+def teyit_images(items):
+    if not items:
+        return []
+    items = sorted(items, key=lambda x: (not x[1]["ok"], x[1]["ko"]))
+    blocks = [PG.teyit_row(m, v, ko_local(m).strftime("%H:%M"), nm) for m, v in items]
+    n_ok = sum(1 for _, v in items if v["ok"])
+    return PG.paginate("MAÇ ÖNÜ TEYİT", f"{n_ok} seçim geçerli · {len(items) - n_ok} iptal", blocks,
+                       ("Sabahki seçimin ihtimali maça kadar 2 puan ya da daha fazla düştüyse iptal edilir; testte bu seçimler belirgin şekilde daha az tuttu.",),
+                       accent=(21, 60, 50))

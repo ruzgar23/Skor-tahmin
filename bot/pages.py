@@ -180,6 +180,24 @@ def move_row(m, side, old, new, dlt, when, nm):
     return ("row", 108, draw)
 
 
+def teyit_row(m, v, when, nm):
+    ok = v["ok"]
+
+    def draw(d, y):
+        d.text((60, y + 16), when, font=F(26, True), fill=INK)
+        d.text((60, y + 52), _fit(d, m.get("lgName", ""), F(16), 150), font=F(16), fill=MUTED)
+        d.text((230, y + 14), _fit(d, f"{nm(m['home'])} – {nm(m['away'])}", F(26, True), 470), font=F(26, True), fill=INK)
+        if ok:
+            _badge(d, 230, y + 56, f"OYNA: {v['label'].upper()}", GREEN, GREEN_SOFT, 20)
+            d.text((W - 330, y + 18), f"%{round(v['cur'] * 100)} · {'1 birim' if v['tier'] == 3 else '½ birim'}", font=F(22, True), fill=GREEN)
+            d.text((W - 330, y + 56), f"oran ≥ {_odds(1.03 / v['cur'])} ise", font=F(22, True), fill=INK)
+        else:
+            _badge(d, 230, y + 56, f"OYNAMA: {v['label'].upper()}", RED, RED_SOFT, 20)
+            d.text((W - 330, y + 18), "İPTAL", font=F(26, True), fill=RED)
+            d.text((W - 330, y + 56), f"%{round(v['prob'] * 100)} → %{round(v['cur'] * 100)}", font=F(22, True), fill=RED)
+    return ("row", 112, draw)
+
+
 # ---------- kupon ----------
 def coupon_row(title, meta, sel, prob, odds, ev):
     def draw(d, y):

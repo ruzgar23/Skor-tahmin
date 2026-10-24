@@ -88,7 +88,7 @@ def daily_card(title, sub, sections, footer):
             d.text((70, y + 22), it["time"], font=F(34, True), fill=INK)
             d.text((70, y + 66), _fit(d, it["league"], F(20), 190), font=F(20), fill=MUTED)
             d.text((70, y + 98), stars, font=F(26, True), fill=col)
-            d.text((70, y + 130), tname, font=F(18, True), fill=col)
+            d.text((70, y + 130), tname + {3: " · 1 BİRİM", 2: " · ½ BİRİM"}.get(it["tier"], ""), font=F(18, True), fill=col)
             # orta: takımlar + seçim
             x0 = 290
             d.text((x0, y + 18), _fit(d, f"{it['home']} – {it['away']}", F(30, True), 500), font=F(30, True), fill=INK)

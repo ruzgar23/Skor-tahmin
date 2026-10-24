@@ -208,8 +208,9 @@ def handle_commands(st, wait=0):
                     reply(chat, imgs_or(visual.coupon_images, data, basket, arg), extra.coupon_message(data, basket, arg))
             elif cmd == "/karne":
                 y = today - timedelta(days=1)
-                reply(chat, imgs_or(visual.report_images, hist["matches"], y),
-                      core.report_message(hist["matches"], y) or "Dün için sonuçlanmış öneri yok.")
+                pk = _load(RUN_FILE, {}).get("picks", {})
+                reply(chat, imgs_or(visual.report_images, hist["matches"], y, pk),
+                      core.report_message(hist["matches"], y, pk) or "Dün için sonuçlanmış öneri yok.")
             else:
                 tg.send(chat, core.HELP)
         except Exception:
@@ -234,7 +235,8 @@ def daily_body(st):
     hist = jload("history.json", {"matches": []})
     if st["sent"].get("report") != str(today - timedelta(days=1)):
         y = today - timedelta(days=1)
-        broadcast_rich(st, imgs_or(visual.report_images, hist["matches"], y), core.report_message(hist["matches"], y), silent=True)
+        pk = st.get("picks", {})
+        broadcast_rich(st, imgs_or(visual.report_images, hist["matches"], y, pk), core.report_message(hist["matches"], y, pk), silent=True)
         st["sent"]["report"] = str(today - timedelta(days=1))
     if st["sent"].get("daily") != str(today):
         data = jload("data.json"); basket = jload("basket.json", {})
@@ -243,7 +245,43 @@ def daily_body(st):
         broadcast_rich(st, imgs_or(visual.all_matches_images, data, basket, today), "",
                        caption="Bugünün tüm maçları (futbol + basketbol). Ayrıntı için /mac takım", silent=True)
         st["sent"]["daily"] = str(today)
+    remember_picks(st, today)
     check_moves(st)
+
+
+def remember_picks(st, today):
+    """Günlük mesajdaki seçimleri maç önü teyit için saklar (günde bir kez)."""
+    if st["sent"].get("daily") != str(today) or st.get("picks_day") == str(today):
+        return
+    picks = st.setdefault("picks", {})
+    for k, v in extra.daily_picks(jload("data.json", {"matches": []}), today).items():
+        picks.setdefault(k, v)
+    st["picks_day"] = str(today)
+
+
+def teyit(st):
+    """Maça ~1 saat kala sabahki seçimleri güncel oranla kontrol eder; aleyhe kayanları iptal eder."""
+    picks = st.setdefault("picks", {}); now = datetime.now(timezone.utc)
+    for k in [k for k, v in picks.items() if datetime.fromisoformat(v["ko"]) < now - timedelta(days=4)]:
+        del picks[k]
+    due = extra.teyit_due(picks, now)
+    if not due:
+        return False
+    data = jload("data.json", {"matches": []})
+    gen = datetime.fromisoformat(data["generated"]) if data.get("generated") else None
+    if not gen or now - gen > timedelta(minutes=25):
+        scan(); publish("Maç önü tazeleme", SITE_FILES_DAILY); data = jload("data.json", {"matches": []})
+    by_id = {m["id"]: m for m in data.get("matches", [])}
+    items = []
+    for k in due:
+        v = picks[k]; v["done"] = True; m = by_id.get(k)
+        if not m or not m.get("p"):
+            continue
+        v["cur"] = extra.cur_prob(m, v); v["ok"] = v["cur"] > v["prob"] - extra.TEYIT_DROP
+        items.append((m, v))
+    if items:
+        broadcast_rich(st, imgs_or(visual.teyit_images, items), extra.teyit_message(items))
+    return True
 
 
 def check_moves(st):
@@ -357,6 +395,9 @@ def bot():
                 daily_body(st); save_state(st)
             elif not gen or datetime.now(timezone.utc) - gen > timedelta(hours=2):
                 scan(); publish("Veri tazeleme", SITE_FILES_DAILY); check_moves(st); save_state(st)
+            remember_picks(st, today)
+            if teyit(st):
+                save_state(st)
             if time.time() - last_live >= LOOP_EVERY:
                 last_live = time.time()
                 if live_active or upcoming_soon(jload("data.json", {"matches": []})):

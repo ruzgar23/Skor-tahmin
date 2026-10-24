@@ -305,3 +305,70 @@ def coupon_message(data, basket, body):
             out.append(f"Toplam oran {odds_fmt(s['odds'])} · beklenen getiri {'+' if s['ev'] >= 0 else ''}{round(s['ev'] * 100)}%")
         out.append("<i>Maç sayısı arttıkça büro payı her maçta katlanır; kombineler uzun vadede tekli bahislerden daha çok kaybettirir.</i>")
     return "\n".join(out)
+
+
+# ---------- maç önü teyit ve birim ----------
+# Backtest (49 bin maç, 8 sezon): sabah verilen seçimin piyasa olasılığı maça kadar 2 puan ya da daha fazla
+# aleyhe kaydıysa o seçim belirgin şekilde daha az tutuyor. Bu seçimleri maç önü iptal etmek tutma oranını
+# Güçlü'de %79,7 → %80,5, Orta'da %65,2 → %66,4'e çıkardı; etki 8 sezonun hepsinde aynı yöndeydi.
+TEYIT_DROP = 0.02
+UNIT = {3: "1 birim", 2: "½ birim"}
+
+
+def cur_prob(m, g):
+    """Aynı seçimin şu anki olasılığı (m: güncel maç verisi, g: sabahki seçim)."""
+    p = m["p"]; fam = g["fam"]
+    if fam == "MS":
+        return p[g["label"].split()[-1]]
+    return {"O25": p["O25"], "U25": 1 - p["O25"], "KGV": p["BTTS"], "KGY": 1 - p["BTTS"]}[fam]
+
+
+def daily_picks(data, day, max_mid=8):
+    """Günlük mesajda gönderilen seçimler (görselle aynı seçim kuralı)."""
+    graded = [(m, core.grade(m)) for m in core.day_matches(data, day)]
+    strong = [x for x in graded if x[1] and x[1]["tier"] == 3]
+    mid = sorted([x for x in graded if x[1] and x[1]["tier"] == 2], key=lambda x: -x[1]["prob"])[:max_mid]
+    return {m["id"]: dict(fam=g["fam"], label=g["label"], prob=g["prob"], tier=g["tier"], ko=m["ko"],
+                          home=m["home"], away=m["away"], lgName=m["lgName"], minOdds=g["minOdds"])
+            for m, g in strong + mid}
+
+
+def teyit_due(picks, now, lo=15, hi=100):
+    """Maçına lo..hi dakika kalan, henüz teyit edilmemiş seçimler. Kaçırılanlar sessizce kapanır."""
+    due = []
+    for k, v in picks.items():
+        if v.get("done"):
+            continue
+        ko = datetime.fromisoformat(v["ko"])
+        if ko < now + timedelta(minutes=lo):
+            v["done"] = True; v["missed"] = True
+        elif ko <= now + timedelta(minutes=hi):
+            due.append(k)
+    return due
+
+
+def teyit_message(items):
+    ok = [x for x in items if x[1]["ok"]]; bad = [x for x in items if not x[1]["ok"]]
+    out = ["⏱ <b>Maç önü teyit</b> (oranlar son kez kontrol edildi)"]
+    for m, v in sorted(ok, key=lambda x: x[1]["ko"]):
+        out.append(f"\n✅ {ko_local(m).strftime('%H:%M')} <b>{e(nm(m['home']))} – {e(nm(m['away']))}</b>\n"
+                   f"   👉 OYNA: <b>{e(v['label'].upper())}</b> · %{round(v['cur'] * 100)} · oran ≥ <b>{odds_fmt(1.03 / v['cur'])}</b> · {UNIT.get(v['tier'], '')}")
+    for m, v in sorted(bad, key=lambda x: x[1]["ko"]):
+        out.append(f"\n⛔ {ko_local(m).strftime('%H:%M')} <b>{e(nm(m['home']))} – {e(nm(m['away']))}</b>\n"
+                   f"   OYNAMA: {e(v['label'])} · ihtimal %{round(v['prob'] * 100)} → %{round(v['cur'] * 100)} düştü")
+    out.append("\n<i>Sabahki seçimin ihtimali maça kadar 2 puan ya da daha fazla düştüyse iptal edilir; testte bu seçimler belirgin şekilde daha az tuttu.</i>")
+    return "\n".join(out)
+
+
+def teyit_summary(picks, history, day):
+    """Karne için: o günün iptal edilen ve teyitli seçimlerinin sonucu."""
+    res = {h["id"]: h.get("res") for h in history if h.get("res")}
+    s = {"ok": [0, 0], "bad": [0, 0]}
+    for k, v in (picks or {}).items():
+        if v.get("cur") is None or ko_local(v).date() != day or not res.get(k):
+            continue
+        key = core.LABEL2KEY[v["label"]]; won = core.settle(key, res[k])
+        if won is None:
+            continue
+        b = s["ok" if v["ok"] else "bad"]; b[0] += 1; b[1] += won
+    return s if (s["ok"][0] or s["bad"][0]) else None

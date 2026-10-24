@@ -26,6 +26,7 @@ TIER_LG = {"UCL": 0, "UEL": 0, "UECL": 0, "E0": 1, "SP1": 1, "I1": 1, "D1": 1, "
            "SC0": 1, "G1": 1, "E1": 2, "SP2": 2, "I2": 2, "D2": 2, "F2": 2, "SC1": 2, "E2": 3, "E3": 3, "SC2": 3, "SC3": 3}
 TIERNAME = {3: "Güçlü", 2: "Orta", 1: "Düşük güven"}
 HIT = {("MS", 3): .80, ("MS", 2): .67, ("O25", 3): .74, ("O25", 2): .65, ("U25", 2): .63, ("KGV", 2): .64}
+UNIT = {3: "1 birim", 2: "½ birim"}
 LABEL2KEY = {"MS 1": "1", "MS X": "X", "MS 2": "2", "2,5 Üst": "O25", "2,5 Alt": "U25", "KG Var": "BTTS", "KG Yok": "NBTTS"}
 
 
@@ -92,7 +93,8 @@ FOOTER = "\n<i>Olasılıklar garanti değildir; %70'lik bir seçim de 10 maçın
 def pick_line(m, g, with_time=True):
     t = ko_local(m).strftime("%H:%M") + " · " if with_time else ""
     return (f"{t}<b>{e(nm(m['home']))} – {e(nm(m['away']))}</b> <i>({e(m['lgName'])})</i>\n"
-            f"   👉 OYNA: <b>{e(g['label'].upper())}</b> · tutma %{round(g['prob'] * 100)} · oran ≥ <b>{odds_fmt(g['minOdds'])}</b> ise")
+            f"   👉 OYNA: <b>{e(g['label'].upper())}</b> · tutma %{round(g['prob'] * 100)} · oran ≥ <b>{odds_fmt(g['minOdds'])}</b> ise"
+            + (f" · {UNIT[g['tier']]}" if g['tier'] in UNIT else ""))
 
 
 def day_matches(data, day):
@@ -181,7 +183,7 @@ def match_message(data, q):
     return "\n".join(lines) + link_line()
 
 
-def report_message(history, day):
+def report_message(history, day, picks=None):
     done = [h for h in history if h.get("res") and ko_local(h).date() == day]
     if not done:
         return None
@@ -203,6 +205,11 @@ def report_message(history, day):
         n, k = t[tier]
         if n:
             head.append(f"{TIERNAME[tier]}: {n} seçimin {k}'i tuttu ({pct(k / n)})")
+    import extra
+    ts = extra.teyit_summary(picks, history, day)
+    if ts:
+        (n1, w1), (n0, w0) = ts["ok"], ts["bad"]
+        head.append(f"Maç önü teyit: {n1} teyitli seçimin {w1}'i tuttu" + (f"; iptal edilen {n0} seçimin {w0}'i tuttu" if n0 else ""))
     return "\n".join(head) + "\n\n" + "\n".join(rows) + "\n\n<i>Tek günlük sonuç şansa çok bağlıdır.</i>"
 
 

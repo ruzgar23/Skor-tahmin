@@ -72,3 +72,9 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
 - GitHub'ın zamanlanmış çalışmaları saatlerce gecikebildiği için bot zamanlayıcıya güvenmez: her çalıştırma sonunda bir sonrakini kendisi başlatır. Zamanlayıcı (30 dakikada bir) yalnızca zincir koparsa devreye girer.
 - Herkese açık depolarda Actions süresi ücretsizdir. Bot sürekli çalıştığı için gizli bir depoda aylık ücretsiz süre yetmez; depoyu herkese açık tut.
 - Bir iş başarısız olursa Actions sekmesinde kırmızı görünür. Telegram'a mesaj gelmiyorsa önce oraya bak.
+
+## Maç önü teyit ve birim (backtest ile eklendi)
+- Sabah gönderilen seçimler maça ~1 saat kala güncel oranla tekrar kontrol edilir. İhtimali 2 puan ya da daha fazla düşen seçim **iptal** edilir.
+  49 bin maçlık 8 sezonluk testte bu, Güçlü seçimlerin tutma oranını %79,7 → %80,5'e, Orta seçimlerinkini %65,2 → %66,4'e çıkardı.
+- Birim önerisi: Güçlü 1 birim, Orta ½ birim (1 birim = kasanın %2'si).
+- Yorgunluk, Avrupa maçı, sezon sonu motivasyonu, ilk 11 eksikleri ve lig bazlı ayar da test edildi; piyasa bunları zaten fiyatladığı için eklenmedi. Testler `backtest/` klasöründe.
