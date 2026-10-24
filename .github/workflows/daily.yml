@@ -7,7 +7,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: bot
+  group: tarama
   cancel-in-progress: false
 jobs:
   daily:
@@ -21,10 +21,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
+      - name: İş durumunu geri yükle
+        uses: actions/cache/restore@v4
+        with: { path: state/run, key: "run-${{ github.run_id }}", restore-keys: "run-" }
+      - name: football-data önbelleğini geri yükle
+        uses: actions/cache/restore@v4
+        with: { path: fd, key: "fd-${{ github.run_id }}", restore-keys: "fd-" }
       - run: python bot/run.py daily
       - if: always()
         uses: actions/cache/save@v4
-        with: { path: state, key: "tgstate-${{ github.run_id }}" }
+        with: { path: state/run, key: "run-${{ github.run_id }}" }
       - if: always()
         uses: actions/cache/save@v4
         with: { path: fd, key: "fd-${{ github.run_id }}" }

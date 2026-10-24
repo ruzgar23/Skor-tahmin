@@ -22,23 +22,37 @@ import tg, core, extra  # noqa: E402
 SITE = os.environ.get("SITE_DIR", os.path.join(ROOT, "site-out"))
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(ROOT, "state"))
 FD = os.environ.get("FD_DIR", os.path.join(ROOT, "fd"))
-STATE = os.path.join(STATE_DIR, "tg_state.json")
+SUBS_FILE = os.path.join(STATE_DIR, "subs", "subs.json")   # yalnızca komut işi yazar
+RUN_FILE = os.path.join(STATE_DIR, "run", "run.json")      # sabah ve canlı işleri yazar
+CMD_SECONDS = int(os.environ.get("CMD_SECONDS", "560"))
 EXTRA = [c.strip() for c in os.environ.get("TELEGRAM_CHAT_ID", "").split(",") if c.strip()]
 LOOP_EVERY = int(os.environ.get("LIVE_EVERY_SEC", "300"))
 MAX_LOOP = int(os.environ.get("LIVE_MAX_SEC", str(5 * 3600 + 40 * 60)))
 
 
 # ---------- durum ----------
-def load_state():
+def _load(path, default):
     try:
-        return json.load(open(STATE))
+        return json.load(open(path))
     except Exception:
-        return {"offset": 0, "subs": {}, "sent": {}}
+        return default
+
+
+def _save(path, obj):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"; json.dump(obj, open(tmp, "w")); os.replace(tmp, path)
+
+
+def load_state():
+    """Abone listesi (salt okunur kopya) + bu işin kendi durumu."""
+    st = _load(RUN_FILE, {"sent": {}, "moves": {}})
+    st.setdefault("sent", {}); st.setdefault("moves", {})
+    st["subs"] = _load(SUBS_FILE, {}).get("subs", {})
+    return st
 
 
 def save_state(st):
-    os.makedirs(STATE_DIR, exist_ok=True)
-    json.dump(st, open(STATE, "w"))
+    _save(RUN_FILE, {k: v for k, v in st.items() if k != "subs"})
 
 
 def recipients(st):
@@ -47,8 +61,7 @@ def recipients(st):
 
 def broadcast(st, text, silent=False):
     for c in recipients(st):
-        if not tg.send(c, text, silent=silent) and c in st["subs"]:
-            st["subs"][c]["on"] = False  # botu engellemiş
+        tg.send(c, text, silent=silent)
 
 
 def jload(name, default=None):
@@ -85,10 +98,10 @@ def scan():
 
 
 # ---------- komutlar ----------
-def handle_commands(st):
-    ups = tg.updates(st.get("offset", 0))
+def handle_commands(st, wait=0):
+    ups = tg.updates(st.get("offset", 0), wait)
     if not ups:
-        return
+        return False
     data = jload("data.json", {"matches": []}); hist = jload("history.json", {"matches": []}); basket = jload("basket.json", {})
     for u in ups:
         st["offset"] = u["update_id"] + 1
@@ -132,6 +145,7 @@ def handle_commands(st):
         except Exception:
             traceback.print_exc()
             tg.send(chat, "Bir hata oluştu, biraz sonra tekrar dene.")
+    return True
 
 
 # ---------- modlar ----------
@@ -141,7 +155,6 @@ def daily():
     me = tg.call("getMe")
     if me.get("ok"):
         json.dump({"bot": me["result"].get("username")}, open(os.path.join(SITE, "config.json"), "w"))
-    handle_commands(st)
     scan()
     publish("Sabah taraması")
     today = now_ist().date()
@@ -183,7 +196,6 @@ def live():
     while True:
         t0 = time.time()
         try:
-            handle_commands(st)
             data = jload("data.json", {"matches": []})
             gen = datetime.fromisoformat(data["generated"]) if data.get("generated") else None
             if not gen or datetime.now(timezone.utc) - gen > timedelta(hours=2):
@@ -213,8 +225,25 @@ def live():
     save_state(st)
 
 
+def refresh_site():
+    """Komut işinin sayfa verisi kopyasını gh-pages'ten tazeler."""
+    g = lambda *a: subprocess.run(["git", "-C", SITE, *a], check=False, capture_output=True, text=True)
+    if g("fetch", "-q", "--depth", "1", "origin", "gh-pages").returncode == 0:
+        g("reset", "-q", "--hard", "FETCH_HEAD")
+
+
 def commands():
-    st = load_state(); handle_commands(st); save_state(st)
+    """~10 dakika boyunca Telegram'ı dinler; komutlara birkaç saniyede cevap verir."""
+    subs = _load(SUBS_FILE, {"offset": 0, "subs": {}})
+    subs.setdefault("offset", 0); subs.setdefault("subs", {})
+    start = time.time(); last_refresh = start
+    while time.time() - start < CMD_SECONDS:
+        left = CMD_SECONDS - (time.time() - start)
+        if time.time() - last_refresh > 180:
+            refresh_site(); last_refresh = time.time()
+        if handle_commands(subs, wait=int(max(1, min(50, left - 5)))):
+            _save(SUBS_FILE, subs)
+    _save(SUBS_FILE, subs)
 
 
 if __name__ == "__main__":

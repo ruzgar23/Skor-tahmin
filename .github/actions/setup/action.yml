@@ -10,18 +10,12 @@ runs:
         cache-dependency-path: requirements.txt
     - run: pip install -r requirements.txt
       shell: bash
-    - name: Bot durumunu geri yükle (abone listesi, son komut)
+    - name: Abone listesini geri yükle (salt okunur; yalnızca komut işi kaydeder)
       uses: actions/cache/restore@v4
       with:
-        path: state
-        key: tgstate-${{ github.run_id }}
-        restore-keys: tgstate-
-    - name: football-data önbelleğini geri yükle
-      uses: actions/cache/restore@v4
-      with:
-        path: fd
-        key: fd-${{ github.run_id }}
-        restore-keys: fd-
+        path: state/subs
+        key: subs-${{ github.run_id }}
+        restore-keys: subs-
     - name: gh-pages dalını çek
       shell: bash
       run: |

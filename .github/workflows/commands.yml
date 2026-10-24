@@ -1,5 +1,6 @@
 name: Bot komutları
-# /bugun, /canli gibi komutlara cevap verir. Canlı döngü çalışırken komutları o cevaplar.
+# Her çalıştırma ~10 dakika Telegram'ı dinler ve komutlara birkaç saniyede cevap verir.
+# 10 dakikada bir yeniden başlatılır; bir önceki bitmeden yenisi beklemeye alınır.
 on:
   schedule:
     - cron: "*/10 * * * *"
@@ -7,20 +8,21 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: bot
+  group: komutlar
   cancel-in-progress: false
 jobs:
   commands:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
       SITE_URL: ${{ vars.SITE_URL }}
+      CMD_SECONDS: "560"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
       - run: python bot/run.py commands
       - if: always()
         uses: actions/cache/save@v4
-        with: { path: state, key: "tgstate-${{ github.run_id }}" }
+        with: { path: state/subs, key: "subs-${{ github.run_id }}" }

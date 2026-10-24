@@ -13,7 +13,7 @@ def call(method, **params):
                                    for k, v in params.items() if v is not None}).encode()
     for attempt in range(3):
         try:
-            with urllib.request.urlopen(API + method, data=data, timeout=40) as r:
+            with urllib.request.urlopen(API + method, data=data, timeout=70) as r:
                 return json.loads(r.read())
         except urllib.error.HTTPError as e:
             body = json.loads(e.read() or b"{}")
@@ -53,8 +53,8 @@ def send(chat_id, text, silent=False):
     return ok
 
 
-def updates(offset):
-    r = call("getUpdates", offset=offset, timeout=0, allowed_updates=["message"])
+def updates(offset, wait=0):
+    r = call("getUpdates", offset=offset, timeout=wait, allowed_updates=["message"])
     return r.get("result", []) if r.get("ok") else []
 
 
