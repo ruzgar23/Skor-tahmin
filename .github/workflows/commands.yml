@@ -1,0 +1,26 @@
+name: Bot komutları
+# /bugun, /canli gibi komutlara cevap verir. Canlı döngü çalışırken komutları o cevaplar.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: bot
+  cancel-in-progress: false
+jobs:
+  commands:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      SITE_URL: ${{ vars.SITE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: python bot/run.py commands
+      - if: always()
+        uses: actions/cache/save@v4
+        with: { path: state, key: "tgstate-${{ github.run_id }}" }

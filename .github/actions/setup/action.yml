@@ -1,0 +1,32 @@
+name: Ortak kurulum
+description: Python, paketler, bot durumu, veri önbelleği ve gh-pages çalışma kopyası
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        cache: pip
+        cache-dependency-path: requirements.txt
+    - run: pip install -r requirements.txt
+      shell: bash
+    - name: Bot durumunu geri yükle (abone listesi, son komut)
+      uses: actions/cache/restore@v4
+      with:
+        path: state
+        key: tgstate-${{ github.run_id }}
+        restore-keys: tgstate-
+    - name: football-data önbelleğini geri yükle
+      uses: actions/cache/restore@v4
+      with:
+        path: fd
+        key: fd-${{ github.run_id }}
+        restore-keys: fd-
+    - name: gh-pages dalını çek
+      shell: bash
+      run: |
+        git clone -q --depth 1 --branch gh-pages "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" site-out \
+          || (mkdir -p site-out && cd site-out && git init -q -b gh-pages && git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git")
+        # Sayfa ve sabit dosyalar her zaman ana daldan güncellenir
+        cp -r site/. site-out/
+        touch site-out/.nojekyll

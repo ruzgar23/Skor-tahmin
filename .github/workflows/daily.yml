@@ -1,0 +1,30 @@
+name: Sabah taraması
+# Her sabah 09:30 (Türkiye): maçları tarar, dünün karnesini ve günün önerilerini Telegram'a gönderir.
+on:
+  schedule:
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: bot
+  cancel-in-progress: false
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+      SITE_URL: ${{ vars.SITE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: python bot/run.py daily
+      - if: always()
+        uses: actions/cache/save@v4
+        with: { path: state, key: "tgstate-${{ github.run_id }}" }
+      - if: always()
+        uses: actions/cache/save@v4
+        with: { path: fd, key: "fd-${{ github.run_id }}" }

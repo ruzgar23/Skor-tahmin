@@ -1,0 +1,32 @@
+name: Canlı takip
+# Maç saatlerinde (12:00–02:00 Türkiye) her 20 dakikada bir tetiklenir. Canlı maç varsa iş kendi içinde
+# 5 dakikada bir kontrol eden bir döngüye girer ve maç kalmayınca biter; zaten çalışan bir döngü varsa bekler.
+on:
+  schedule:
+    - cron: "*/20 9-23 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: bot
+  cancel-in-progress: false
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+      SITE_URL: ${{ vars.SITE_URL }}
+      LIVE_EVERY_SEC: "300"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: python bot/run.py live
+      - if: always()
+        uses: actions/cache/save@v4
+        with: { path: state, key: "tgstate-${{ github.run_id }}" }
+      - if: always()
+        uses: actions/cache/save@v4
+        with: { path: fd, key: "fd-${{ github.run_id }}" }
