@@ -220,6 +220,11 @@ svg text{fill:var(--muted);font-family:var(--f-mono);font-size:10px}
   <p class="summary" id="summary"></p>
   <div id="list" class="group"></div>
 
+  <details class="k" id="basketBox" hidden open>
+    <summary>Basketbol</summary>
+    <div id="basket"></div>
+  </details>
+
   <details class="k" id="defterBox" open>
     <summary>Bahis defterim</summary>
     <div id="defter"><p class="note">Yükleniyor…</p></div>
@@ -435,6 +440,7 @@ function openMatch(id){
       <div class="mk two">${cells(p,['HTO05','HTO15'],['İY 0,5 Üst','İY 1,5 Üst'])}</div>
       <p class="note">${m.src==='piyasa'?'Oran kaynağı: '+esc(m.book||'piyasa')+'. MS ve 2,5 üst/alt olasılıkları bu oranlardan (büro payı çıkarılmış); KG, ilk yarı ve skorlar bu olasılıklara uydurulmuş gol beklentisinden hesaplanır.':'Bu maç için piyasa oranı yok; olasılıklar yalnızca modelden.'}</p>
     </section>
+    ${statsCard(m)}
     <section class="card"><h2 style="margin:0">İddaa oranı kontrolü</h2>
       <p class="note">Oranı gir; olasılık × oran 1,03'ü geçerse oran piyasa ortalamasından cömert demektir.</p>
       <div class="tw"><table class="t"><thead><tr><th>Market</th><th>Olasılık</th><th>${esc(m.book==='Piyasa ortalaması'?'Piyasa ort.':(m.book||'Oran'))}</th><th>İddaa</th><th>Beklenen</th></tr></thead><tbody>${oddsRows(m)}</tbody></table></div>
@@ -468,6 +474,29 @@ $('fQ').addEventListener('input',render);
 
 // ---------- Telegram linki (config.json: {"bot":"kullanici_adi"}) ----------
 fetch('config.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(c=>{ if(c&&c.bot){ const a=$('tgLink'); a.href='https://t.me/'+encodeURIComponent(c.bot); a.hidden=false; } }).catch(()=>{});
+
+// ---------- kart, korner, oran hareketi ----------
+function lf(x){ return (+x).toFixed(1).replace('.',','); }
+function statsCard(m){
+  const rows=[];
+  if(m.cards){ rows.push(`<h3>Kart (sarı + kırmızı) · ort. ${lf(m.cards.mean)}${m.cards.ref?' · hakem etkisi dahil':''}</h3><div class="mk">${Object.entries(m.cards.over).map(([l,p])=>`<div class="cell${p>=.68||p<=.32?' top':''}"><span class="k">${lf(l)} Üst</span><span class="v">${pct(p)}</span><span class="o">lig ort. ${pct(m.cards.base?.[l]??0,0)}</span></div>`).join('')}</div>`); }
+  if(m.corners){ rows.push(`<h3>Korner · ort. ${lf(m.corners.mean)}</h3><div class="mk">${Object.entries(m.corners.over).slice(0,3).map(([l,p])=>`<div class="cell"><span class="k">${lf(l)} Üst</span><span class="v">${pct(p)}</span><span class="o">lig ort. ${pct(m.corners.base?.[l]??0,0)}</span></div>`).join('')}</div><p class="note">Korner tahmini testte lig ortalamasından yalnızca çok az iyi çıktı; bilgi amaçlı.</p>`); }
+  if(m.move){ const d=m.move.d; rows.push(`<h3>Oran hareketi (açılış → şimdi)</h3><div class="mk">${['1','X','2'].map(k=>`<div class="cell${d[k]>=.06?' top':''}"><span class="k">MS ${k}</span><span class="v">${num(m.move.open[k])} → ${num(m.move.now[k])}</span><span class="o">${d[k]>0?'+':''}${Math.round(d[k]*100)} puan</span></div>`).join('')}</div>`); }
+  return rows.length?`<section class="card"><h2 style="margin:0">Kart, korner, oran hareketi</h2>${rows.join('')}</section>`:'';
+}
+
+// ---------- basketbol ----------
+async function loadBasket(){
+  let B; try{ const r=await fetch('basket.json',{cache:'no-store'}); if(!r.ok) throw 0; B=await r.json(); }catch(e){ return; }
+  const now=Date.now(), gs=(B.games||[]).filter(g=>new Date(g.ko).getTime()>now && g.p).sort((a,b)=>a.ko.localeCompare(b.ko));
+  if(!gs.length) return;
+  $('basketBox').hidden=false;
+  $('basket').innerHTML = `<p class="note" style="margin:8px 0">Olasılıklar DraftKings oranlarından. Geçen sezon %75+ favoriler %76–85, %65–75 favoriler %64–76 kazandı. Handikap ve alt/üst çizgileri ~%50 olduğu için öneri verilmez.</p>`+
+    `<div class="tw"><table class="t"><thead><tr><th>Maç</th><th>MS 1</th><th>MS 2</th><th>Handikap</th><th>Toplam</th><th>Öneri</th></tr></thead><tbody>`+
+    gs.map(g=>{ const p=g.p, f=p['1']>=p['2']?'1':'2', pr=p[f], t=pr>=.75?3:pr>=.65?2:0;
+      return `<tr><td>${esc(g.home)} – ${esc(g.away)}<span class="lgt">${esc(g.lg)} · ${fmtDay(g.ko)} ${fmtTime(g.ko)}</span></td><td>${pct(p['1'],0)}</td><td>${pct(p['2'],0)}</td><td>${g.odds.spread!=null?lf(g.odds.spread):'–'}</td><td>${p.exp_total?lf(p.exp_total):'–'}</td><td>${t?`<span class="badge t${t}">${TIERNAME[t]} · MS ${f} ${pct(pr,0)}</span> <span class="note">en az ${num(1.03/pr)}</span>`:'–'}</td></tr>`; }).join('')+
+    `</tbody></table></div>`;
+}
 
 // ---------- karne ----------
 async function karne(){
@@ -632,7 +661,7 @@ async function loadLive(){
 }
 setInterval(loadLive, 60000);
 
-load(); karne(); loadHistory(); initDefter(); loadLive();
+load(); karne(); loadHistory(); initDefter(); loadLive(); loadBasket();
 </script>
 </body>
 </html>

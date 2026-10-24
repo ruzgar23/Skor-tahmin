@@ -10,15 +10,32 @@ Futbol maçları için olasılık tahminleri: maç sonucu, çifte şans, alt/üs
 |---|---|
 | Her sabah 09:30 (TR) | Dünün karnesi ve günün güçlü/orta önerileri (seçim, olasılık, oynamaya değmesi için gereken en düşük iddaa oranı) |
 | Maç saatlerinde, 5 dakikada bir | Canlı fırsat adayları: dakika, skor, kartlar, seçim, olasılık, gereken en düşük canlı oran |
-| Her zaman (birkaç dakika içinde) | Bot komutları: `/bugun`, `/guclu`, `/orta`, `/canli`, `/mac takım`, `/karne`, `/dur` |
+| Gün içinde | Oran düşüşü uyarıları: bir maçın oranı açılıştan bu yana belirgin şekilde düşerse |
+| Her zaman (birkaç dakika içinde) | Bot komutları: `/bugun`, `/guclu`, `/orta`, `/canli`, `/mac takım`, `/basket`, `/kupon`, `/karne`, `/dur` |
 
-Kapsam: Premier League, Championship, League One/Two, La Liga 1–2, Serie A–B, Bundesliga 1–2, Ligue 1–2, Süper Lig, Eredivisie, Portekiz, İskoçya (4 lig), Yunanistan, Şampiyonlar Ligi, Avrupa Ligi, Konferans Ligi.
+**Kupon değerlendirme:** Bota her satıra bir maç gelecek şekilde kuponunu yaz:
+
+```
+/kupon
+galatasaray 1 1.85
+arsenal 2.5 üst 1.70
+fenerbahçe kart 4.5 üst 1.80
+lakers 2 1.95
+```
+
+Bot her seçimin olasılığını, oranının değerli olup olmadığını ve kuponun toplam tutma olasılığını söyler.
+
+Kapsam (futbol): Premier League, Championship, League One/Two, La Liga 1–2, Serie A–B, Bundesliga 1–2, Ligue 1–2, Süper Lig, Eredivisie, Portekiz, İskoçya (4 lig), Yunanistan, Şampiyonlar Ligi, Avrupa Ligi, Konferans Ligi. Basketbol: NBA ve WNBA.
 
 ## Nasıl çalışır
 
 - **Maç öncesi:** Olasılıkların ana kaynağı, büro payı çıkarılmış piyasa oranlarıdır. KG, ilk yarı ve skor dağılımı bu oranlara uydurulmuş gol beklentisinden (Poisson, Dixon-Coles düzeltmesi) hesaplanır. Oran yoksa maç bazlı model kullanılır: zamana ağırlıklı, rakip gücünü hesaba katan, takıma özel iç saha etkisi olan ve gol ile xG'yi harmanlayan bir model. Bu maçlar "düşük güven" olarak işaretlenir.
 - **Güven seviyeleri:** 8.152 maçlık geriye dönük testte güçlü öneriler %74–80, orta öneriler %63–67 tuttu.
 - **Canlı:** Maç öncesi gol beklentisi kalan süreye, skora ve kırmızı kartlara göre güncellenir. Ayarlar 13.598 maçlık devre arası verisinden yapıldı. Şut, isabetli şut, korner ve şut konumundan xG de test edildi; tahmini iyileştirmedikleri için modelde yer almıyorlar (2.687 maç, sezon içi eğitim/test ayrımıyla).
+- **Kart:** Takım ve hakem bazlı model. Lig ortalamasına göre %3–5 daha iyi tahmin ediyor; "%70+" seçimlerin %71–77'si tuttu (2025-26, 6.783 maç). Kart için piyasa oranı verisi yok.
+- **Korner:** Tahmin gösterilir ama öneri verilmez; testte lig ortalamasından yalnızca çok az iyi çıktı.
+- **Basketbol:** Olasılıklar DraftKings oranlarından. Geçen sezon %75+ favoriler %76–85, %65–75 favoriler %64–76 kazandı (1.064 NBA maçı). Handikap ve alt/üst çizgileri ~%50 olduğu için öneri verilmez.
+- **Oran hareketi:** Açılış ile güncel oran arasında olasılığı 6 puandan fazla değişen taraflar bildirilir. Bu bir bilgi, oynama sinyali değil.
 - **Kâr kanıtı yok:** Modelin piyasadan farklı düşündüğü bahisleri oynamak testte yaklaşık %15 kaybettirdi. Araç olasılıkları doğru tahmin eder; büroyu yendiğini iddia etmez.
 
 Veri kaynakları: [football-data.co.uk](https://football-data.co.uk) (sonuçlar, oranlar, xG) ve ESPN'in herkese açık skor servisi (fikstür, canlı skor, oranlar). Bu kaynakların kendi kullanım koşulları geçerlidir; proje kişisel ve ticari olmayan kullanım içindir.
@@ -43,8 +60,8 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
 
 ## Dosyalar
 
-- `engine/`: model ve veri (`engine.py` model, `scan.py` tarama, `espn.py` fikstür ve canlı veri, `live.py` canlı analiz)
-- `bot/`: Telegram botu (`run.py` giriş noktası, `core.py` öneri ve mesaj biçimleri, `tg.py` Telegram API)
+- `engine/`: model ve veri (`engine.py` gol modeli, `scan.py` tarama, `espn.py` fikstür ve canlı veri, `live.py` canlı analiz, `corners.py` kart ve korner, `nba.py` basketbol)
+- `bot/`: Telegram botu (`run.py` giriş noktası, `core.py` öneri ve mesaj biçimleri, `extra.py` kupon, kart, basketbol ve oran hareketi, `tg.py` Telegram API)
 - `site/`: web sayfası (`gh-pages` dalına veriyle birlikte yayınlanır; bahis defteri yalnızca ziyaretçinin tarayıcısında saklanır)
 - `.github/workflows/`: sabah taraması, canlı takip, bot komutları
 

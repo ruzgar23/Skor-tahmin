@@ -7,6 +7,8 @@ import numpy as np
 from scipy.optimize import minimize
 import engine as E
 import espn
+import corners as C
+import nba
 
 P = dict(E.DEFAULT, xi=0.004, lam=6.0, lam_h=60.0, xg_w=0.5, rho=-0.06)
 RHO = P["rho"]
@@ -187,6 +189,11 @@ def main(datadir, outpath, skip_download=False, prev=None, histpath=None, seed=N
     print(f"ESPN'den {added} yeni sonuç eklendi")
     today = now.astimezone(ZoneInfo("Europe/Istanbul")).date()
     models = {c: E.CountryModel(c, matches, today, P) for c in E.COUNTRIES}
+    stat_rows = C.load(datadir)
+    smodels = {c: (C.StatModel(c, stat_rows, today, "corners", lam=60.0), C.StatModel(c, stat_rows, today, "cards", lam=20.0))
+               for c in E.COUNTRIES}
+    sbase = C.base_rates(stat_rows, today)
+    refs = C.referee_factors(stat_rows, smodels, today)
     ctx = team_context(matches)
 
     # football-data fikstürü (test edilmiş ortalama oranlar burada)
@@ -257,7 +264,17 @@ def main(datadir, outpath, skip_download=False, prev=None, histpath=None, seed=N
         known = (kk[0] and it["known_names"][0], kk[1] and it["known_names"][1])
         hlg = it.get("hlg") if cup else lg; alg = it.get("alg") if cup else lg
         mk_out = {k: round(v, 4) for k, v in mk.items() if k != "OL"} if mk else None
+        extra = {}
+        if not cup:
+            cm, km = smodels[E.LEAGUE_COUNTRY[lg]]
+            ref = fd.get("ref")
+            extra = C.predict_match(cm, km, sbase.get(E.LEAGUE_COUNTRY[lg], {}), refs, home, away, lg, ref)
+        if eo and eo.get("open") and all(eo["open"].values()):
+            fo = E.fair(eo["open"], "1X2"); fc = E.fair({k: eo[k] for k in "1X2"}, "1X2")
+            extra["move"] = dict(open={k: round(eo["open"][k], 2) for k in "1X2"}, now={k: round(eo[k], 2) for k in "1X2"},
+                                 d={k: round(fc[k] - fo[k], 4) for k in "1X2"})
         out.append(dict(
+            **extra,
             id=f"{lg}-{it['ko']:%Y-%m-%d}-{home}-{away}".replace(" ", "_"),
             lg=lg, lgName=(espn.CUP_NAMES[lg] if cup else E.LEAGUE_NAMES[lg]), ko=it["ko"].isoformat(), home=home, away=away,
             cup=cup, hlg=hlg, alg=alg,
@@ -294,6 +311,10 @@ def main(datadir, outpath, skip_download=False, prev=None, histpath=None, seed=N
         json.dump(dict(updated=now.isoformat(), matches=sorted(hist.values(), key=lambda h: h["ko"])),
                   open(histpath, "w"), ensure_ascii=False, separators=(",", ":"))
         print(f"Geçmiş: {len(hist)} tahmin, bu taramada {n_set} maç sonuçlandı")
+    try:
+        nba.scan(os.path.join(os.path.dirname(outpath) or ".", "basket.json"))
+    except Exception as e:
+        print("Basketbol taranamadı:", e)
     last_result = max((m["date"] for m in matches), default=None)
     data = dict(generated=now.isoformat(), resultsUpTo=last_result.isoformat() if last_result else None,
                 fixtures=dict(start=out[0]["ko"][:10] if out else None, end=out[-1]["ko"][:10] if out else None),

@@ -169,6 +169,8 @@ def match_message(data, q):
              f"KG Var {pct(p['BTTS'])} · İY 1/X/2 {pct(p['HT1'])}/{pct(p['HTX'])}/{pct(p['HT2'])}",
              f"En olası skorlar: {tops}",
              f"Gol beklentisi: {m['lam'][0]:.2f} – {m['lam'][1]:.2f}".replace(".", ",")]
+    import extra
+    lines += extra.stat_lines(m)
     if g:
         lines += ["", f"<b>Öneri: {e(g['label'])} {pct(g['prob'])}</b> · {TIERNAME[g['tier']]}",
                   f"Oynamaya değmesi için iddaa oranı en az <b>{odds_fmt(g['minOdds'])}</b>"]
@@ -235,10 +237,12 @@ def live_list_message(live):
 HELP = ("<b>Skor Tahmin Botu</b>\n"
         "Her sabah günün maç önerilerini, maç sırasında canlı fırsat adaylarını ve günün karnesini gönderir.\n\n"
         "/bugun – bugünün tüm maçları\n/guclu – güçlü öneriler\n/orta – orta öneriler\n"
-        "/canli – şu an oynanan maçlar\n/mac galatasaray – tek maçın ayrıntısı\n/karne – dünün sonuçları\n"
+        "/canli – şu an oynanan maçlar\n/mac galatasaray – tek maçın ayrıntısı\n/basket – basketbol maçları\n"
+        "/kupon – kuponunu değerlendir (her satıra: takım seçim oran)\n/karne – dünün sonuçları\n"
         "/dur – bildirimleri kapat · /start – tekrar aç\n\n"
         "<i>Komutlara birkaç dakika içinde cevap verilir. Olasılıklar garanti değildir.</i>")
 
 COMMANDS = [("bugun", "Bugünün tüm maçları"), ("guclu", "Güçlü öneriler"), ("orta", "Orta öneriler"),
-            ("canli", "Şu an oynanan maçlar"), ("mac", "Tek maç: /mac takım"), ("karne", "Dünün sonuçları"),
+            ("canli", "Şu an oynanan maçlar"), ("mac", "Tek maç: /mac takım"), ("basket", "Basketbol maçları"),
+            ("kupon", "Kupon değerlendir"), ("karne", "Dünün sonuçları"),
             ("dur", "Bildirimleri kapat"), ("yardim", "Yardım")]

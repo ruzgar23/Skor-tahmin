@@ -79,6 +79,8 @@ def parse_odds(c):
     o = {"1": pick("home"), "X": pick("draw"), "2": pick("away")}
     if not all(o.values()):
         return None
+    op = lambda side: american(((ml.get(side) or {}).get("open") or {}).get("odds"))
+    o["open"] = {"1": op("home"), "X": op("draw"), "2": op("away")}
     tot = od.get("total") or {}
     line = od.get("overUnder")
     ov = ((tot.get("over") or {}).get("close") or {}).get("odds")

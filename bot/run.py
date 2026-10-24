@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "engine"), os.path.join(ROOT, "bot")]
-import tg, core  # noqa: E402
+import tg, core, extra  # noqa: E402
 
 SITE = os.environ.get("SITE_DIR", os.path.join(ROOT, "site-out"))
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(ROOT, "state"))
@@ -89,14 +89,14 @@ def handle_commands(st):
     ups = tg.updates(st.get("offset", 0))
     if not ups:
         return
-    data = jload("data.json", {"matches": []}); hist = jload("history.json", {"matches": []})
+    data = jload("data.json", {"matches": []}); hist = jload("history.json", {"matches": []}); basket = jload("basket.json", {})
     for u in ups:
         st["offset"] = u["update_id"] + 1
         msg = u.get("message") or {}
         chat = str((msg.get("chat") or {}).get("id", "")); text = (msg.get("text") or "").strip()
         if not chat or not text.startswith("/"):
             continue
-        cmd, _, arg = text.partition(" "); cmd = cmd.split("@")[0].lower()
+        parts = text.split(None, 1); cmd = parts[0].split("@")[0].lower(); arg = parts[1] if len(parts) > 1 else ""
         today = now_ist().date()
         try:
             if cmd == "/start":
@@ -114,7 +114,17 @@ def handle_commands(st):
             elif cmd == "/canli":
                 tg.send(chat, core.live_list_message(jload("live.json")))
             elif cmd == "/mac":
-                tg.send(chat, core.match_message(data, arg.strip()) if arg.strip() else "Kullanım: /mac galatasaray")
+                if not arg.strip():
+                    tg.send(chat, "Kullanım: /mac galatasaray")
+                else:
+                    r = core.match_message(data, arg.strip())
+                    if "bulunamadı" in r:
+                        r = extra.basket_match(basket, arg.strip()) or r
+                    tg.send(chat, r)
+            elif cmd == "/basket":
+                tg.send(chat, extra.basket_message(basket))
+            elif cmd == "/kupon":
+                tg.send(chat, extra.coupon_message(data, basket, arg))
             elif cmd == "/karne":
                 tg.send(chat, core.report_message(hist["matches"], today - timedelta(days=1)) or "Dün için sonuçlanmış öneri yok.")
             else:
@@ -141,10 +151,24 @@ def daily():
         if r: broadcast(st, r, silent=True)
         st["sent"]["report"] = str(today - timedelta(days=1))
     if st["sent"].get("daily") != str(today):
-        msg = core.daily_message(jload("data.json"), today)
+        data = jload("data.json"); basket = jload("basket.json", {})
+        msg = core.daily_message(data, today)
         if msg: broadcast(st, msg)
+        more = extra.cards_section(data, today) + "\n" + extra.basket_section(basket)
+        if more.strip(): broadcast(st, more.strip() + core.link_line(), silent=True)
         st["sent"]["daily"] = str(today)
+    check_moves(st)
     save_state(st)
+
+
+def check_moves(st):
+    seen = st.setdefault("moves", {})
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+    for k in [k for k, v in seen.items() if v < cutoff]:
+        del seen[k]
+    items = extra.move_alerts(jload("data.json", {"matches": []}), jload("basket.json", {}), seen)
+    if items:
+        broadcast(st, extra.move_message(items[:10]))
 
 
 def upcoming_soon(data, minutes=25):
@@ -162,9 +186,10 @@ def live():
             handle_commands(st)
             data = jload("data.json", {"matches": []})
             gen = datetime.fromisoformat(data["generated"]) if data.get("generated") else None
-            if not gen or datetime.now(timezone.utc) - gen > timedelta(hours=4):
+            if not gen or datetime.now(timezone.utc) - gen > timedelta(hours=2):
                 if time.time() - last_scan > 3600:
                     scan(); last_scan = time.time(); data = jload("data.json", {"matches": []})
+                    check_moves(st)
             lj = os.path.join(SITE, "live.json")
             L.main(os.path.join(SITE, "data.json"), lj, lj if os.path.exists(lj) else None)
             lv = jload("live.json", {"matches": [], "alerts": []})
