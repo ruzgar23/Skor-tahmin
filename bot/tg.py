@@ -60,3 +60,34 @@ def updates(offset, wait=0):
 
 def set_commands(cmds):
     call("setMyCommands", commands=[{"command": c, "description": d} for c, d in cmds])
+
+
+def send_photo(chat_id, png, caption=None, silent=False):
+    """PNG gönderir (multipart/form-data)."""
+    import uuid
+    if not TOKEN:
+        raise RuntimeError("TELEGRAM_TOKEN tanımlı değil.")
+    b = uuid.uuid4().hex
+    parts = []
+    def field(name, value):
+        parts.append(f"--{b}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n".encode())
+    field("chat_id", chat_id)
+    if caption:
+        field("caption", caption[:1000]); field("parse_mode", "HTML")
+    if silent:
+        field("disable_notification", "true")
+    parts.append(f"--{b}\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"kart.png\"\r\nContent-Type: image/png\r\n\r\n".encode() + png + b"\r\n")
+    parts.append(f"--{b}--\r\n".encode())
+    req = urllib.request.Request(API + "sendPhoto", data=b"".join(parts), headers={"Content-Type": f"multipart/form-data; boundary={b}"})
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=70) as r:
+                return json.loads(r.read()).get("ok", False)
+        except urllib.error.HTTPError as e:
+            body = json.loads(e.read() or b"{}")
+            if e.code == 429:
+                time.sleep(body.get("parameters", {}).get("retry_after", 3) + 1); continue
+            print("Fotoğraf gönderilemedi:", chat_id, body.get("description")); return False
+        except Exception:
+            time.sleep(2)
+    return False

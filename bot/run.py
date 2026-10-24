@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "engine"), os.path.join(ROOT, "bot")]
-import tg, core, extra  # noqa: E402
+import tg, core, extra, visual  # noqa: E402
 
 SITE = os.environ.get("SITE_DIR", os.path.join(ROOT, "site-out"))
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(ROOT, "state"))
@@ -64,6 +64,12 @@ def broadcast(st, text, silent=False):
         tg.send(c, text, silent=silent)
 
 
+def broadcast_photos(st, pngs, caption=None):
+    for c in recipients(st):
+        for i, png in enumerate(pngs):
+            tg.send_photo(c, png, caption=caption if i == 0 else None, silent=i > 0)
+
+
 def jload(name, default=None):
     try:
         return json.load(open(os.path.join(SITE, name)))
@@ -76,18 +82,38 @@ def now_ist():
 
 
 # ---------- site (gh-pages) ----------
-def publish(msg):
-    """site-out klasörünü gh-pages dalına tek commit olarak gönderir (geçmiş birikmez)."""
+SITE_FILES_DAILY = ["index.html", "backtest.json", ".nojekyll", "config.json", "data.json", "history.json", "basket.json"]
+
+
+def publish(msg, files):
+    """Yalnızca bu işin dosyalarını gh-pages'in en güncel hâlinin üstüne yazar (diğer işin dosyaları korunur).
+    Dal her zaman tek commit'tir; geçmiş birikmez."""
     if not os.path.isdir(os.path.join(SITE, ".git")):
         print("SITE_DIR bir git kopyası değil; yayın atlandı."); return
     g = lambda *a: subprocess.run(["git", "-C", SITE, *a], check=False, capture_output=True, text=True)
-    g("checkout", "--orphan", "tmp-publish"); g("add", "-A")
-    r = g("-c", "user.name=skor-bot", "-c", "user.email=skor-bot@users.noreply.github.com", "commit", "-q", "-m", msg)
-    if r.returncode != 0 and "nothing to commit" in (r.stdout + r.stderr):
-        g("checkout", "-q", "gh-pages"); g("branch", "-D", "tmp-publish"); return
-    p = g("push", "-q", "-f", "origin", "HEAD:gh-pages")
-    print("yayın:", msg, "ok" if p.returncode == 0 else p.stderr[-300:])
-    g("branch", "-D", "gh-pages"); g("branch", "-m", "gh-pages")
+    mine = {}
+    for f in files:
+        p = os.path.join(SITE, f)
+        if os.path.exists(p):
+            mine[f] = open(p, "rb").read()
+    for attempt in range(4):
+        base = None
+        if g("fetch", "-q", "--depth", "1", "origin", "gh-pages").returncode == 0:
+            base = g("rev-parse", "FETCH_HEAD").stdout.strip()
+            g("reset", "-q", "--hard", "FETCH_HEAD")
+        for f, b in mine.items():
+            open(os.path.join(SITE, f), "wb").write(b)
+        g("checkout", "-q", "--orphan", "tmp-publish"); g("add", "-A")
+        c = g("-c", "user.name=skor-bot", "-c", "user.email=skor-bot@users.noreply.github.com", "commit", "-q", "-m", msg)
+        if c.returncode != 0 and "nothing to commit" in (c.stdout + c.stderr):
+            g("checkout", "-q", "-f", "gh-pages"); g("branch", "-D", "tmp-publish"); return
+        lease = f"--force-with-lease=gh-pages:{base}" if base else "--force"
+        p = g("push", "-q", lease, "origin", "HEAD:gh-pages")
+        g("branch", "-D", "gh-pages"); g("branch", "-m", "gh-pages")
+        if p.returncode == 0:
+            print("yayın:", msg, "ok"); return
+        print("yayın çakıştı, tekrar deneniyor:", p.stderr[-200:]); time.sleep(3 + attempt * 3)
+    print("yayın başarısız:", msg)
 
 
 # ---------- tarama ----------
@@ -118,6 +144,15 @@ def handle_commands(st, wait=0):
             elif cmd in ("/dur", "/stop"):
                 st["subs"].setdefault(chat, {})["on"] = False
                 tg.send(chat, "🔕 Bildirimler kapatıldı. Tekrar açmak için /start.")
+            elif cmd in ("/nasil", "/nasıl"):
+                tg.send(chat, visual.how_to())
+            elif cmd == "/secimler":
+                imgs = visual.daily_images(data, basket, today)
+                if imgs:
+                    for i, png in enumerate(imgs):
+                        tg.send_photo(chat, png, caption=visual.how_to() if i == 0 else None)
+                else:
+                    tg.send(chat, "Bugün için kalan belirgin bir seçim yok.")
             elif cmd == "/bugun":
                 tg.send(chat, core.all_matches_message(data, today))
             elif cmd == "/guclu":
@@ -130,10 +165,19 @@ def handle_commands(st, wait=0):
                 if not arg.strip():
                     tg.send(chat, "Kullanım: /mac galatasaray")
                 else:
+                    png = None
+                    try:
+                        png = visual.match_image(data, arg.strip())
+                    except Exception:
+                        traceback.print_exc()
                     r = core.match_message(data, arg.strip())
-                    if "bulunamadı" in r:
-                        r = extra.basket_match(basket, arg.strip()) or r
-                    tg.send(chat, r)
+                    if png:
+                        tg.send_photo(chat, png)
+                        tg.send(chat, r, silent=True)
+                    else:
+                        if "bulunamadı" in r:
+                            r = extra.basket_match(basket, arg.strip()) or r
+                        tg.send(chat, r)
             elif cmd == "/basket":
                 tg.send(chat, extra.basket_message(basket))
             elif cmd == "/kupon":
@@ -156,7 +200,7 @@ def daily():
     if me.get("ok"):
         json.dump({"bot": me["result"].get("username")}, open(os.path.join(SITE, "config.json"), "w"))
     scan()
-    publish("Sabah taraması")
+    publish("Sabah taraması", SITE_FILES_DAILY)
     today = now_ist().date()
     hist = jload("history.json", {"matches": []})
     if st["sent"].get("report") != str(today - timedelta(days=1)):
@@ -165,10 +209,14 @@ def daily():
         st["sent"]["report"] = str(today - timedelta(days=1))
     if st["sent"].get("daily") != str(today):
         data = jload("data.json"); basket = jload("basket.json", {})
-        msg = core.daily_message(data, today)
-        if msg: broadcast(st, msg)
-        more = extra.cards_section(data, today) + "\n" + extra.basket_section(basket)
-        if more.strip(): broadcast(st, more.strip() + core.link_line(), silent=True)
+        imgs = []
+        try:
+            imgs = visual.daily_images(data, basket, today)
+        except Exception:
+            traceback.print_exc()
+        if imgs:
+            broadcast_photos(st, imgs, caption=visual.how_to())
+        broadcast(st, visual.daily_text(data, basket, today) + core.FOOTER, silent=bool(imgs))
         st["sent"]["daily"] = str(today)
     check_moves(st)
     save_state(st)
@@ -195,12 +243,13 @@ def live():
     st = load_state(); start = time.time(); last_scan = 0
     while True:
         t0 = time.time()
+        rescanned = False
         try:
             data = jload("data.json", {"matches": []})
             gen = datetime.fromisoformat(data["generated"]) if data.get("generated") else None
             if not gen or datetime.now(timezone.utc) - gen > timedelta(hours=2):
                 if time.time() - last_scan > 3600:
-                    scan(); last_scan = time.time(); data = jload("data.json", {"matches": []})
+                    scan(); last_scan = time.time(); data = jload("data.json", {"matches": []}); rescanned = True
                     check_moves(st)
             lj = os.path.join(SITE, "live.json")
             L.main(os.path.join(SITE, "data.json"), lj, lj if os.path.exists(lj) else None)
@@ -213,7 +262,7 @@ def live():
                 if m and pk: alerts.append((m, pk))
             if alerts:
                 broadcast(st, core.live_alert_message(alerts[:8]))
-            publish("Canlı güncelleme")
+            publish("Canlı güncelleme", ["live.json"] + (SITE_FILES_DAILY if rescanned else []))
             save_state(st)
             n_live = len(lv["matches"])
         except Exception:

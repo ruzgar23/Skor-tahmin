@@ -92,7 +92,7 @@ FOOTER = "\n<i>Olasılıklar garanti değildir; %70'lik bir seçim de 10 maçın
 def pick_line(m, g, with_time=True):
     t = ko_local(m).strftime("%H:%M") + " · " if with_time else ""
     return (f"{t}<b>{e(nm(m['home']))} – {e(nm(m['away']))}</b> <i>({e(m['lgName'])})</i>\n"
-            f"   → <b>{e(g['label'])}</b> {pct(g['prob'])} · iddaa en az <b>{odds_fmt(g['minOdds'])}</b>")
+            f"   👉 OYNA: <b>{e(g['label'].upper())}</b> · tutma %{round(g['prob'] * 100)} · oran ≥ <b>{odds_fmt(g['minOdds'])}</b> ise")
 
 
 def day_matches(data, day):
@@ -214,7 +214,7 @@ def live_alert_message(alerts):
         reds = (" 🟥" * m["reds"][0]) + " / " + (" 🟥" * m["reds"][1]) if any(m["reds"]) else ""
         out.append(f"\n<b>{e(m.get('clock') or '')} {e(nm(m['home']))} {m['score'][0]}-{m['score'][1]} {e(nm(m['away']))}</b>"
                    f" <i>({e(m['lgName'])})</i>{reds}{sot}\n"
-                   f"   → <b>{e(pk['label'])}</b> {pct(pk['prob'])} · iddaa canlı en az <b>{odds_fmt(pk['minOdds'])}</b>")
+                   f"   👉 OYNA: <b>{e(pk['label'].upper())}</b> · tutma %{round(pk['prob'] * 100)} · canlı oran ≥ <b>{odds_fmt(pk['minOdds'])}</b> ise")
     out.append("\n<i>İddaa'nın canlı oranı bu sınırın altındaysa oynama; canlı oranlar hızla değişir.</i>")
     return "\n".join(out)
 
@@ -236,13 +236,14 @@ def live_list_message(live):
 
 HELP = ("<b>Skor Tahmin Botu</b>\n"
         "Her sabah günün maç önerilerini, maç sırasında canlı fırsat adaylarını ve günün karnesini gönderir.\n\n"
+        "/secimler – günün seçimleri (görsel)\n/nasil – nasıl oynanır\n"
         "/bugun – bugünün tüm maçları\n/guclu – güçlü öneriler\n/orta – orta öneriler\n"
         "/canli – şu an oynanan maçlar\n/mac galatasaray – tek maçın ayrıntısı\n/basket – basketbol maçları\n"
         "/kupon – kuponunu değerlendir (her satıra: takım seçim oran)\n/karne – dünün sonuçları\n"
         "/dur – bildirimleri kapat · /start – tekrar aç\n\n"
         "<i>Komutlara birkaç dakika içinde cevap verilir. Olasılıklar garanti değildir.</i>")
 
-COMMANDS = [("bugun", "Bugünün tüm maçları"), ("guclu", "Güçlü öneriler"), ("orta", "Orta öneriler"),
+COMMANDS = [("secimler", "Günün seçimleri (görsel)"), ("nasil", "Nasıl oynanır"), ("bugun", "Bugünün tüm maçları"), ("guclu", "Güçlü öneriler"), ("orta", "Orta öneriler"),
             ("canli", "Şu an oynanan maçlar"), ("mac", "Tek maç: /mac takım"), ("basket", "Basketbol maçları"),
             ("kupon", "Kupon değerlendir"), ("karne", "Dünün sonuçları"),
             ("dur", "Bildirimleri kapat"), ("yardim", "Yardım")]
