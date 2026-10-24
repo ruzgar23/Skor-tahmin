@@ -11,7 +11,9 @@ Futbol maçları için olasılık tahminleri: maç sonucu, çifte şans, alt/üs
 | Her sabah 09:30 (TR) | Dünün karnesi ve günün güçlü/orta önerileri (seçim, olasılık, oynamaya değmesi için gereken en düşük iddaa oranı) |
 | Maç saatlerinde, 5 dakikada bir | Canlı fırsat adayları: dakika, skor, kartlar, seçim, olasılık, gereken en düşük canlı oran |
 | Gün içinde | Oran düşüşü uyarıları: bir maçın oranı açılıştan bu yana belirgin şekilde düşerse |
-| Her zaman (birkaç dakika içinde) | Bot komutları: `/bugun`, `/guclu`, `/orta`, `/canli`, `/mac takım`, `/basket`, `/kupon`, `/karne`, `/dur` |
+| Her zaman (birkaç saniye içinde) | Bot komutları: `/secimler`, `/bugun`, `/guclu`, `/orta`, `/canli`, `/mac takım`, `/basket`, `/kupon`, `/karne`, `/nasil`, `/dur` |
+
+Mesajlar görsel kartlar olarak gelir: her seçimde "OYNA" talimatı, tutma ihtimali çubuğu, güven yıldızları ve oynamaya değmesi için gereken en düşük iddaa oranı yazar. Çok sayfalı listeler kaydırılabilir albüm olarak gönderilir.
 
 **Kupon değerlendirme:** Bota her satıra bir maç gelecek şekilde kuponunu yaz:
 

@@ -64,10 +64,30 @@ def broadcast(st, text, silent=False):
         tg.send(c, text, silent=silent)
 
 
-def broadcast_photos(st, pngs, caption=None):
+def broadcast_photos(st, pngs, caption=None, silent=False):
     for c in recipients(st):
-        for i, png in enumerate(pngs):
-            tg.send_photo(c, png, caption=caption if i == 0 else None, silent=i > 0)
+        tg.send_album(c, pngs, caption=caption, silent=silent)
+
+
+def imgs_or(fn, *a):
+    """Görsel üretir; hata olursa boş liste döner (o zaman yazılı mesaj gider)."""
+    try:
+        return fn(*a) or []
+    except Exception:
+        traceback.print_exc(); return []
+
+
+def reply(chat, pngs, text, caption=None):
+    if pngs and tg.send_album(chat, pngs, caption=caption):
+        return
+    tg.send(chat, text)
+
+
+def broadcast_rich(st, pngs, text, caption=None, silent=False):
+    if pngs:
+        broadcast_photos(st, pngs, caption=caption, silent=silent)
+    elif text:
+        broadcast(st, text, silent=silent)
 
 
 def jload(name, default=None):
@@ -147,43 +167,49 @@ def handle_commands(st, wait=0):
             elif cmd in ("/nasil", "/nasıl"):
                 tg.send(chat, visual.how_to())
             elif cmd == "/secimler":
-                imgs = visual.daily_images(data, basket, today)
-                if imgs:
-                    for i, png in enumerate(imgs):
-                        tg.send_photo(chat, png, caption=visual.how_to() if i == 0 else None)
-                else:
-                    tg.send(chat, "Bugün için kalan belirgin bir seçim yok.")
+                reply(chat, imgs_or(visual.daily_images, data, basket, today),
+                      visual.daily_text(data, basket, today), caption=visual.how_to())
             elif cmd == "/bugun":
-                tg.send(chat, core.all_matches_message(data, today))
+                reply(chat, imgs_or(visual.all_matches_images, data, basket, today), core.all_matches_message(data, today),
+                      caption="Bugünün tüm maçları. Ayrıntı için /mac takım")
             elif cmd == "/guclu":
-                tg.send(chat, core.tier_list_message(data, today, 3))
+                reply(chat, imgs_or(visual.daily_images, {"matches": [m for m in data["matches"] if (core.grade(m) or {}).get("tier") == 3]}, {}, today),
+                      core.tier_list_message(data, today, 3))
             elif cmd == "/orta":
-                tg.send(chat, core.tier_list_message(data, today, 2))
+                reply(chat, imgs_or(visual.daily_images, {"matches": [m for m in data["matches"] if (core.grade(m) or {}).get("tier") == 2]}, {}, today),
+                      core.tier_list_message(data, today, 2))
             elif cmd == "/canli":
-                tg.send(chat, core.live_list_message(jload("live.json")))
+                lv = jload("live.json")
+                imgs = imgs_or(visual.live_list_images, lv)
+                if imgs: tg.send_album(chat, imgs)
+                else: tg.send(chat, core.live_list_message(lv))
             elif cmd == "/mac":
                 if not arg.strip():
                     tg.send(chat, "Kullanım: /mac galatasaray")
                 else:
-                    png = None
-                    try:
-                        png = visual.match_image(data, arg.strip())
-                    except Exception:
-                        traceback.print_exc()
+                    png = imgs_or(lambda: [visual.match_image(data, arg.strip())] if visual.match_image(data, arg.strip()) else [])
                     r = core.match_message(data, arg.strip())
                     if png:
-                        tg.send_photo(chat, png)
-                        tg.send(chat, r, silent=True)
+                        tg.send_photo(chat, png[0])
                     else:
-                        if "bulunamadı" in r:
-                            r = extra.basket_match(basket, arg.strip()) or r
-                        tg.send(chat, r)
+                        bimg = imgs_or(visual.basket_match_images, basket, arg.strip())
+                        if bimg:
+                            tg.send_album(chat, bimg)
+                        else:
+                            if "bulunamadı" in r:
+                                r = extra.basket_match(basket, arg.strip()) or r
+                            tg.send(chat, r)
             elif cmd == "/basket":
-                tg.send(chat, extra.basket_message(basket))
+                reply(chat, imgs_or(visual.all_matches_images, {"matches": []}, basket, today), extra.basket_message(basket))
             elif cmd == "/kupon":
-                tg.send(chat, extra.coupon_message(data, basket, arg))
+                if not arg.strip():
+                    tg.send(chat, extra.COUPON_HELP)
+                else:
+                    reply(chat, imgs_or(visual.coupon_images, data, basket, arg), extra.coupon_message(data, basket, arg))
             elif cmd == "/karne":
-                tg.send(chat, core.report_message(hist["matches"], today - timedelta(days=1)) or "Dün için sonuçlanmış öneri yok.")
+                y = today - timedelta(days=1)
+                reply(chat, imgs_or(visual.report_images, hist["matches"], y),
+                      core.report_message(hist["matches"], y) or "Dün için sonuçlanmış öneri yok.")
             else:
                 tg.send(chat, core.HELP)
         except Exception:
@@ -204,19 +230,15 @@ def daily():
     today = now_ist().date()
     hist = jload("history.json", {"matches": []})
     if st["sent"].get("report") != str(today - timedelta(days=1)):
-        r = core.report_message(hist["matches"], today - timedelta(days=1))
-        if r: broadcast(st, r, silent=True)
+        y = today - timedelta(days=1)
+        broadcast_rich(st, imgs_or(visual.report_images, hist["matches"], y), core.report_message(hist["matches"], y), silent=True)
         st["sent"]["report"] = str(today - timedelta(days=1))
     if st["sent"].get("daily") != str(today):
         data = jload("data.json"); basket = jload("basket.json", {})
-        imgs = []
-        try:
-            imgs = visual.daily_images(data, basket, today)
-        except Exception:
-            traceback.print_exc()
-        if imgs:
-            broadcast_photos(st, imgs, caption=visual.how_to())
-        broadcast(st, visual.daily_text(data, basket, today) + core.FOOTER, silent=bool(imgs))
+        broadcast_rich(st, imgs_or(visual.daily_images, data, basket, today),
+                       visual.daily_text(data, basket, today) + core.FOOTER, caption=visual.how_to())
+        broadcast_rich(st, imgs_or(visual.all_matches_images, data, basket, today), "",
+                       caption="Bugünün tüm maçları (futbol + basketbol). Ayrıntı için /mac takım", silent=True)
         st["sent"]["daily"] = str(today)
     check_moves(st)
     save_state(st)
@@ -229,7 +251,7 @@ def check_moves(st):
         del seen[k]
     items = extra.move_alerts(jload("data.json", {"matches": []}), jload("basket.json", {}), seen)
     if items:
-        broadcast(st, extra.move_message(items[:10]))
+        broadcast_rich(st, imgs_or(visual.move_images, items[:10]), extra.move_message(items[:10]))
 
 
 def upcoming_soon(data, minutes=25):
@@ -261,7 +283,7 @@ def live():
                 pk = next((p for p in (m or {}).get("picks", []) if p["k"] == a["k"]), None)
                 if m and pk: alerts.append((m, pk))
             if alerts:
-                broadcast(st, core.live_alert_message(alerts[:8]))
+                broadcast_rich(st, imgs_or(visual.live_images, alerts[:8]), core.live_alert_message(alerts[:8]))
             publish("Canlı güncelleme", ["live.json"] + (SITE_FILES_DAILY if rescanned else []))
             save_state(st)
             n_live = len(lv["matches"])

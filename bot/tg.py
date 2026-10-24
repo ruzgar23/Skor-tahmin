@@ -91,3 +91,43 @@ def send_photo(chat_id, png, caption=None, silent=False):
         except Exception:
             time.sleep(2)
     return False
+
+
+def send_album(chat_id, pngs, caption=None, silent=False):
+    """Birden çok resmi kaydırılabilir albüm olarak gönderir (10'arlı gruplar)."""
+    import uuid
+    if not pngs:
+        return True
+    if len(pngs) == 1:
+        return send_photo(chat_id, pngs[0], caption=caption, silent=silent)
+    ok = True
+    for gi in range(0, len(pngs), 10):
+        grp = pngs[gi:gi + 10]
+        b = uuid.uuid4().hex; parts = []
+        media = []
+        for i, _ in enumerate(grp):
+            it = {"type": "photo", "media": f"attach://p{i}"}
+            if i == 0 and gi == 0 and caption:
+                it["caption"] = caption[:1000]; it["parse_mode"] = "HTML"
+            media.append(it)
+        def field(name, value):
+            parts.append(f"--{b}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n".encode())
+        field("chat_id", chat_id); field("media", json.dumps(media, ensure_ascii=False))
+        if silent or gi > 0:
+            field("disable_notification", "true")
+        for i, png in enumerate(grp):
+            parts.append(f"--{b}\r\nContent-Disposition: form-data; name=\"p{i}\"; filename=\"p{i}.png\"\r\nContent-Type: image/png\r\n\r\n".encode() + png + b"\r\n")
+        parts.append(f"--{b}--\r\n".encode())
+        req = urllib.request.Request(API + "sendMediaGroup", data=b"".join(parts), headers={"Content-Type": f"multipart/form-data; boundary={b}"})
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(req, timeout=120) as r:
+                    ok = ok and json.loads(r.read()).get("ok", False); break
+            except urllib.error.HTTPError as e:
+                body = json.loads(e.read() or b"{}")
+                if e.code == 429:
+                    time.sleep(body.get("parameters", {}).get("retry_after", 3) + 1); continue
+                print("Albüm gönderilemedi:", chat_id, body.get("description")); ok = False; break
+            except Exception:
+                time.sleep(2)
+    return ok

@@ -244,46 +244,64 @@ def sel_prob(m, kind, sel):
     return (po if side == "O" else 1 - po), f"{key.capitalize()} {line_fmt(line)} {'Üst' if side == 'O' else 'Alt'}"
 
 
-def coupon_message(data, basket, body):
+COUPON_HELP = ("Kullanım (her satıra bir maç: takım, seçim, oran):\n<code>/kupon\ngalatasaray 1 1.85\narsenal 2.5 üst 1.70\nbarcelona kg 1.65\n"
+               "fenerbahçe kart 4.5 üst 1.80\nlakers 2 1.95</code>\n\n"
+               "Seçimler: 1 · X · 2 · 1X · X2 · 12 · üst/alt (1.5, 2.5, 3.5) · kg · kgyok · iy1/iyx/iy2 · kart 4.5 üst · korner 9.5 alt. "
+               "Basketbol: 1 · 2 · üst/alt 225.5")
+
+
+def coupon_eval(data, basket, body):
+    """Kupon satırlarını değerlendirir. Dönüş: (satırlar, özet) ya da (None, None)."""
     lines = [l.strip() for l in body.strip().splitlines() if l.strip()]
     if not lines:
-        return ("Kullanım (her satıra bir maç: takım, seçim, oran):\n<code>/kupon\ngalatasaray 1 1.85\narsenal 2.5 üst 1.70\nbarcelona kg 1.65\n"
-                "fenerbahçe kart 4.5 üst 1.80\nlakers 2 1.95</code>\n\n"
-                "Seçimler: 1 · X · 2 · 1X · X2 · 12 · üst/alt (1.5, 2.5, 3.5) · kg · kgyok · iy1/iyx/iy2 · kart 4.5 üst · korner 9.5 alt. "
-                "Basketbol: 1 · 2 · üst/alt 225.5")
-    out = ["🧾 <b>Kupon değerlendirmesi</b>"]
-    tot_p, tot_o, all_odds, seen, n_ok = 1.0, 1.0, True, set(), 0
+        return None, None
+    rows, tot_p, tot_o, all_odds, seen, n_ok, dup = [], 1.0, 1.0, True, set(), 0, False
     for raw in lines[:15]:
         pl = parse_line(raw)
         if not pl:
-            out.append(f"\n❓ <i>{e(raw)}</i>\n   Seçim anlaşılamadı."); all_odds = False; continue
+            rows.append(dict(ok=False, raw=raw, why="Seçim anlaşılamadı.")); all_odds = False; continue
         m, kind = find_match(data, basket, pl["team"])
         if not m:
-            out.append(f"\n❓ <i>{e(raw)}</i>\n   “{e(pl['team'])}” için yaklaşan maç bulunamadı."); all_odds = False; continue
+            rows.append(dict(ok=False, raw=raw, why=f"“{pl['team']}” için yaklaşan maç bulunamadı.")); all_odds = False; continue
         pr, lbl = sel_prob(m, kind, pl["sel"])
-        title = f"{e(nm(m['home']))} – {e(nm(m['away']))}"
+        title = f"{nm(m['home'])} – {nm(m['away'])}"
         if pr is None:
-            out.append(f"\n❓ <b>{title}</b>\n   {e(lbl)}"); all_odds = False; continue
+            rows.append(dict(ok=False, raw=raw, why=f"{title}: {lbl}")); all_odds = False; continue
         n_ok += 1
         if m["id"] in seen:
-            out.append(f"\n⚠️ <b>{title}</b> kuponda iki kez var; aynı maçın seçimleri birbirine bağlıdır, toplam olasılık yanıltıcı olur.")
-        seen.add(m["id"])
-        tot_p *= pr
-        s = f"\n<b>{title}</b> <i>({e(m['lgName'])}, {ko_local(m).strftime('%d.%m %H:%M')})</i>\n   {e(lbl)}: olasılık {pct(pr)} · adil oran {odds_fmt(1 / pr)}"
+            dup = True
+        seen.add(m["id"]); tot_p *= pr
+        ev = None
         if pl["odds"]:
             tot_o *= pl["odds"]; ev = pr * pl["odds"] - 1
-            tag = "✅ değerli" if ev > 0.03 else ("➖ sınırda" if ev >= -0.03 else "❌ düşük oran")
-            s += f"\n   Senin oranın {odds_fmt(pl['odds'])} → beklenen {'+' if ev >= 0 else ''}{round(ev * 100)}% {tag}"
         else:
             all_odds = False
-        if kind == "futbol" and m.get("src") != "piyasa":
-            s += "\n   <i>(piyasa oranı yok, olasılık yalnızca modelden)</i>"
-        out.append(s)
-    if n_ok >= 2:
-        out.append(f"\n<b>Kuponun tutma olasılığı: {pct(tot_p)}</b> (yaklaşık {max(1, round(1 / tot_p))} kuponda 1)")
-        if all_odds:
-            ev = tot_p * tot_o - 1
-            out.append(f"Toplam oran {odds_fmt(tot_o)} · beklenen getiri {'+' if ev >= 0 else ''}{round(ev * 100)}%"
-                       + (" ✅" if ev > 0.03 else " ❌" if ev < -0.03 else ""))
+        rows.append(dict(ok=True, title=title, meta=f"{m['lgName']} · {ko_local(m).strftime('%d.%m %H:%M')}"
+                         + (" · piyasa oranı yok, yalnızca model" if kind == "futbol" and m.get("src") != "piyasa" else ""),
+                         sel=lbl, prob=pr, odds=pl["odds"], ev=ev))
+    summ = dict(n=n_ok, p=tot_p, odds=tot_o if all_odds and n_ok else None,
+                ev=(tot_p * tot_o - 1) if all_odds and n_ok else None, dup=dup)
+    return rows, summ
+
+
+def coupon_message(data, basket, body):
+    rows, s = coupon_eval(data, basket, body)
+    if rows is None:
+        return COUPON_HELP
+    out = ["🧾 <b>Kupon değerlendirmesi</b>"]
+    for r in rows:
+        if not r["ok"]:
+            out.append(f"\n❓ <i>{e(r['raw'])}</i>\n   {e(r['why'])}"); continue
+        t = f"\n<b>{e(r['title'])}</b> <i>({e(r['meta'])})</i>\n   {e(r['sel'])}: olasılık {pct(r['prob'])} · adil oran {odds_fmt(1 / r['prob'])}"
+        if r["odds"]:
+            ev = r["ev"]; tag = "✅ değerli" if ev > 0.03 else ("➖ sınırda" if ev >= -0.03 else "❌ düşük oran")
+            t += f"\n   Senin oranın {odds_fmt(r['odds'])} → beklenen {'+' if ev >= 0 else ''}{round(ev * 100)}% {tag}"
+        out.append(t)
+    if s["dup"]:
+        out.append("\n⚠️ Aynı maç kuponda iki kez var; seçimler birbirine bağlı olduğu için toplam olasılık yanıltıcı olur.")
+    if s["n"] >= 2:
+        out.append(f"\n<b>Kuponun tutma olasılığı: {pct(s['p'])}</b> (yaklaşık {max(1, round(1 / s['p']))} kuponda 1)")
+        if s["ev"] is not None:
+            out.append(f"Toplam oran {odds_fmt(s['odds'])} · beklenen getiri {'+' if s['ev'] >= 0 else ''}{round(s['ev'] * 100)}%")
         out.append("<i>Maç sayısı arttıkça büro payı her maçta katlanır; kombineler uzun vadede tekli bahislerden daha çok kaybettirir.</i>")
     return "\n".join(out)
