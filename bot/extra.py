@@ -372,3 +372,49 @@ def teyit_summary(picks, history, day):
             continue
         b = s["ok" if v["ok"] else "bad"]; b[0] += 1; b[1] += won
     return s if (s["ok"][0] or s["bad"][0]) else None
+
+
+# ---------- canlı seçim karnesi ----------
+def live_settle(k, s0, s, final):
+    """Canlı seçimin sonucu. s0: bildirim anındaki skor, s: şimdiki skor. final=False iken yalnızca kesinleşenler döner."""
+    a, b = s; t = a + b; t0 = s0[0] + s0[1]
+    if k == "GOAL" and t > t0: return True
+    if k == "NOGOAL" and t > t0: return False
+    if k == "BTTS" and a > 0 and b > 0: return True
+    if k == "NBTTS" and a > 0 and b > 0: return False
+    if k[0] in "OU" and k not in ("1", "X", "2"):
+        try:
+            line = float(k[1:])
+        except ValueError:
+            line = None
+        if line is not None and t > line:
+            return k[0] == "O"
+    if not final:
+        return None
+    return {"1": a > b, "X": a == b, "2": a < b, "1X": a >= b, "X2": a <= b, "12": a != b,
+            "BTTS": a > 0 and b > 0, "NBTTS": not (a > 0 and b > 0), "GOAL": t > t0, "NOGOAL": t == t0}.get(
+        k, (t > float(k[1:])) == (k[0] == "O") if k[0] in "OU" else None)
+
+
+def live_won_message(items):
+    out = ["🏆 <b>WON — canlı seçim tuttu!</b>"]
+    for b in items:
+        out.append(f"\n✅ <b>{e(nm(b['home']))} {b['res'][0]}-{b['res'][1]} {e(nm(b['away']))}</b> <i>({e(b['lgName'])})</i>\n"
+                   f"   {e(b['label'])} · {b['minute']}'de %{round(b['prob'] * 100)} ile verilmişti")
+    return "\n".join(out)
+
+
+def live_day(bets, day):
+    return sorted([b for b in (bets or {}).values() if b.get("ok") in (True, False)
+                   and datetime.fromisoformat(b["ts"]).astimezone(IST).date() == day], key=lambda b: b["ts"])
+
+
+def live_report_lines(bets, day):
+    rows = live_day(bets, day)
+    if not rows:
+        return []
+    w = sum(1 for b in rows if b["ok"])
+    out = [f"\n🔴 <b>Canlı seçimler:</b> {len(rows)} seçimin {w}'i tuttu ({pct(w / len(rows))})"]
+    for b in rows:
+        out.append(f"{'✅' if b['ok'] else '❌'} {e(nm(b['home']))} {b['res'][0]}-{b['res'][1]} {e(nm(b['away']))} · {e(b['label'])} ({b['minute']}') {pct(b['prob'])}")
+    return out

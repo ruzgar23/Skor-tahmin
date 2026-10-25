@@ -156,7 +156,7 @@ def all_matches_images(data, basket, day):
     return PG.paginate("BUGÜNÜN MAÇLARI", f"{tr_date(day)} · {n} maç (futbol + basketbol)", blocks, FOOT)
 
 
-def report_images(history, day, picks=None):
+def report_images(history, day, picks=None, live_bets=None):
     done = [h for h in history if h.get("res") and ko_local(h).date() == day]
     rows, t = [], {3: [0, 0], 2: [0, 0]}
     for h in sorted(done, key=lambda h: h["ko"]):
@@ -168,7 +168,8 @@ def report_images(history, day, picks=None):
             continue
         t[g["tier"]][0] += 1; t[g["tier"]][1] += ok
         rows.append(PG.result_row(h, g, ok, nm))
-    if not rows:
+    lv = extra.live_day(live_bets, day)
+    if not rows and not lv:
         return []
     k = []
     for tier, name in ((3, "güçlü"), (2, "orta")):
@@ -176,13 +177,23 @@ def report_images(history, day, picks=None):
         if n:
             k.append((f"{w}/{n}", f"{name} seçim tuttu (%{round(100 * w / n)})", PG.GREEN if w / n >= .6 else PG.AMBER))
     tot_n = t[3][0] + t[2][0]; tot_w = t[3][1] + t[2][1]
-    k.append((f"%{round(100 * tot_w / tot_n)}", "toplam tutma oranı", PG.INK))
+    if tot_n:
+        k.append((f"%{round(100 * tot_w / tot_n)}", "maç öncesi tutma oranı", PG.INK))
+    if lv:
+        lw = sum(1 for b in lv if b["ok"])
+        k.append((f"{lw}/{len(lv)}", f"canlı seçim tuttu (%{round(100 * lw / len(lv))})", PG.GREEN if lw / len(lv) >= .7 else PG.AMBER))
     blocks = [PG.kpi_row(k)]
     ts = extra.teyit_summary(picks, history, day)
     if ts:
         (n1, w1), (n0, w0) = ts["ok"], ts["bad"]
         blocks.append(PG.note_row(f"Maç önü teyitli seçimler: {w1}/{n1} tuttu" + (f" · iptal edilenler: {w0}/{n0} tuttu" if n0 else ""), PG.INK, 56))
-    blocks += [("head", "Maç maç")] + rows
+    if rows:
+        blocks += [("head", "Maç öncesi seçimler")] + rows
+    if lv:
+        blocks.append(("head", "Canlı seçimler"))
+        for b in lv:
+            h = dict(home=b["home"], away=b["away"], res=b["res"], lgName=f"{b['lgName']} · {b['minute']}'de verildi, skor {b['s0'][0]}-{b['s0'][1]}")
+            blocks.append(PG.result_row(h, dict(label=b["label"], prob=b["prob"]), b["ok"], nm))
     return PG.paginate("DÜNÜN KARNESİ", tr_date(day), blocks, ("Tek günlük sonuç şansa çok bağlıdır; asıl ölçü uzun dönem test.",))
 
 
@@ -268,3 +279,14 @@ def teyit_images(items):
     return PG.paginate("MAÇ ÖNÜ TEYİT", f"{n_ok} seçim geçerli · {len(items) - n_ok} iptal", blocks,
                        ("Sabahki seçimin ihtimali maça kadar 2 puan ya da daha fazla düştüyse iptal edilir; testte bu seçimler belirgin şekilde daha az tuttu.",),
                        accent=(21, 60, 50))
+
+
+def live_won_images(items):
+    if not items:
+        return []
+    blocks = []
+    for b in items:
+        h = dict(home=b["home"], away=b["away"], res=b["res"], lgName=f"{b['lgName']} · {b['minute']}'de verildi, skor {b['s0'][0]}-{b['s0'][1]}")
+        blocks.append(PG.result_row(h, dict(label=b["label"], prob=b["prob"]), True, nm))
+    return PG.paginate("WON · CANLI SEÇİM TUTTU", f"{len(items)} canlı seçim kazandı", blocks,
+                       ("Canlı seçimlerin tamamı (tutan ve tutmayan) ertesi sabah karnede.",), accent=(29, 107, 71))

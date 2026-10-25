@@ -218,7 +218,7 @@ def main(datapath, outpath, prevpath=None):
             mkt = live_market(c)
             lgname = espn.CUP_NAMES.get(lg) or E.LEAGUE_NAMES.get(lg, lg)
             out.append(dict(
-                id=(hit[2] if hit and hit[2] else f"{lg}-{ev['id']}"), lg=lg, lgName=lgname,
+                id=(hit[2] if hit and hit[2] else f"{lg}-{ev['id']}"), eid=ev["id"], slug=slug, lg=lg, lgName=lgname,
                 home=h or hn, away=a or an, minute=minute, period=period, clock=ev["status"].get("displayClock"),
                 halftime=ev["status"]["type"]["name"] == "STATUS_HALFTIME",
                 score=[hs, as_], reds=[rh, ra], stats=[stats_of(sd["home"]), stats_of(sd["away"])],

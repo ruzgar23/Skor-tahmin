@@ -183,9 +183,11 @@ def match_message(data, q):
     return "\n".join(lines) + link_line()
 
 
-def report_message(history, day, picks=None):
+def report_message(history, day, picks=None, live_bets=None):
+    import extra
+    lv = extra.live_report_lines(live_bets, day)
     done = [h for h in history if h.get("res") and ko_local(h).date() == day]
-    if not done:
+    if not done and not lv:
         return None
     t = {3: [0, 0], 2: [0, 0]}; rows = []
     for h in sorted(done, key=lambda h: h["ko"]):
@@ -198,19 +200,18 @@ def report_message(history, day, picks=None):
         t[g["tier"]][0] += 1; t[g["tier"]][1] += ok
         rows.append(f"{'✅' if ok else '❌'} {e(nm(h['home']))} {h['res'][0]}-{h['res'][1]} {e(nm(h['away']))} · "
                     f"{e(g['label'])} {pct(g['prob'])}")
-    if not rows:
+    if not rows and not lv:
         return None
     head = [f"📊 <b>Karne — {day.strftime('%d.%m.%Y')}</b>"]
     for tier in (3, 2):
         n, k = t[tier]
         if n:
             head.append(f"{TIERNAME[tier]}: {n} seçimin {k}'i tuttu ({pct(k / n)})")
-    import extra
     ts = extra.teyit_summary(picks, history, day)
     if ts:
         (n1, w1), (n0, w0) = ts["ok"], ts["bad"]
         head.append(f"Maç önü teyit: {n1} teyitli seçimin {w1}'i tuttu" + (f"; iptal edilen {n0} seçimin {w0}'i tuttu" if n0 else ""))
-    return "\n".join(head) + "\n\n" + "\n".join(rows) + "\n\n<i>Tek günlük sonuç şansa çok bağlıdır.</i>"
+    return "\n".join(head) + "\n\n" + "\n".join(rows) + "\n".join([""] + lv) + "\n\n<i>Tek günlük sonuç şansa çok bağlıdır.</i>"
 
 
 def live_alert_message(alerts):

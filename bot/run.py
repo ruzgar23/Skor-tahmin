@@ -208,9 +208,9 @@ def handle_commands(st, wait=0):
                     reply(chat, imgs_or(visual.coupon_images, data, basket, arg), extra.coupon_message(data, basket, arg))
             elif cmd == "/karne":
                 y = today - timedelta(days=1)
-                pk = _load(RUN_FILE, {}).get("picks", {})
-                reply(chat, imgs_or(visual.report_images, hist["matches"], y, pk),
-                      core.report_message(hist["matches"], y, pk) or "Dün için sonuçlanmış öneri yok.")
+                rs = _load(RUN_FILE, {}); pk = rs.get("picks", {}); lb = rs.get("live_bets", {})
+                reply(chat, imgs_or(visual.report_images, hist["matches"], y, pk, lb),
+                      core.report_message(hist["matches"], y, pk, lb) or "Dün için sonuçlanmış öneri yok.")
             else:
                 tg.send(chat, core.HELP)
         except Exception:
@@ -235,8 +235,8 @@ def daily_body(st):
     hist = jload("history.json", {"matches": []})
     if st["sent"].get("report") != str(today - timedelta(days=1)):
         y = today - timedelta(days=1)
-        pk = st.get("picks", {})
-        broadcast_rich(st, imgs_or(visual.report_images, hist["matches"], y, pk), core.report_message(hist["matches"], y, pk), silent=True)
+        pk = st.get("picks", {}); lb = st.get("live_bets", {})
+        broadcast_rich(st, imgs_or(visual.report_images, hist["matches"], y, pk, lb), core.report_message(hist["matches"], y, pk, lb), silent=True)
         st["sent"]["report"] = str(today - timedelta(days=1))
     if st["sent"].get("daily") != str(today):
         data = jload("data.json"); basket = jload("basket.json", {})
@@ -314,8 +314,63 @@ def live_tick(st):
         if m and pk: alerts.append((m, pk))
     if alerts:
         broadcast_rich(st, imgs_or(visual.live_images, alerts[:8]), core.live_alert_message(alerts[:8]))
+        bets = st.setdefault("live_bets", {}); now = datetime.now(timezone.utc).isoformat()
+        for m, pk in alerts[:8]:
+            bets.setdefault(f"{m['id']}|{pk['k']}", dict(
+                eid=m.get("eid"), slug=m.get("slug"), k=pk["k"], label=pk["label"], prob=pk["prob"], minute=m["minute"],
+                home=m["home"], away=m["away"], lgName=m["lgName"], s0=m["score"], ts=now, ok=None))
+    settle_live(st, by_id)
     publish("Canlı güncelleme", ["live.json"])
     return len(lv["matches"])
+
+
+def settle_live(st, live_by_id):
+    """Bildirilen canlı seçimleri skor geldikçe sonuçlandırır; tutanlar için anında WON bildirimi."""
+    import espn
+    bets = st.setdefault("live_bets", {}); now = datetime.now(timezone.utc)
+    for k in [k for k, b in bets.items() if datetime.fromisoformat(b["ts"]) < now - timedelta(days=4)]:
+        del bets[k]
+    by_eid = {m.get("eid"): m for m in live_by_id.values()}
+    won = []
+    for key, b in bets.items():
+        if b.get("ok") is not None:
+            continue
+        m = by_eid.get(b["eid"]); final = False; score = None
+        if m:
+            score = m["score"]
+        elif b.get("eid") and b.get("slug"):
+            t0 = datetime.fromisoformat(b["ts"])
+            for d in sorted({t0.date(), (t0 + timedelta(hours=3)).date()}):
+                try:
+                    j = espn.get(b["slug"], d)
+                except Exception:
+                    continue
+                for ev in j.get("events", []):
+                    if ev["id"] != b["eid"]:
+                        continue
+                    c = ev["competitions"][0]; sd = {x["homeAway"]: x for x in c["competitors"]}
+                    try:
+                        score = [int(sd["home"]["score"]), int(sd["away"]["score"])]
+                    except (KeyError, ValueError, TypeError):
+                        score = None
+                    final = ev["status"]["type"]["state"] == "post"
+            if score is None and now - datetime.fromisoformat(b["ts"]) > timedelta(hours=6):
+                b["ok"] = "?"  # sonuç bulunamadı; karneye girmez
+                continue
+        if score is None:
+            continue
+        b["cur"] = score
+        r = extra.live_settle(b["k"], b["s0"], score, final)
+        if r is None:
+            continue
+        b["ok"] = r; b["res"] = score; b["done_at"] = now.isoformat()
+        if r:
+            won.append(b)
+    for b in bets.values():  # erken kazanılanlarda karne için son skoru tamamla
+        if b.get("ok") is True and b.get("eid") in by_eid:
+            b["res"] = by_eid[b["eid"]]["score"]
+    if won:
+        broadcast_rich(st, imgs_or(visual.live_won_images, won), extra.live_won_message(won))
 
 
 def live():
@@ -403,6 +458,8 @@ def bot():
                 if live_active or upcoming_soon(jload("data.json", {"matches": []})):
                     live_active = live_tick(st) > 0
                     save_state(st)
+                elif any(b.get("ok") is None for b in st.get("live_bets", {}).values()):
+                    settle_live(st, {}); save_state(st)  # canlı maç kalmadı; biten maçların sonucunu al
         except Exception:
             traceback.print_exc()
         left = BOT_SECONDS - (time.time() - start)
