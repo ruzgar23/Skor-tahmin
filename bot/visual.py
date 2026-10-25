@@ -39,6 +39,10 @@ def daily_sections(data, basket, day, max_mid=8, max_cards=4):
             bk.append(dict(time=ko_local(g).strftime("%H:%M"), league=g["lg"], home=short(g["home"]), away=short(g["away"]),
                            pick=gr["label"].upper(), prob=gr["prob"], min_odds=gr["minOdds"], tier=gr["tier"]))
     secs.append(("Basketbol (NBA)", sorted(bk, key=lambda r: r["time"])))
+    for head, gs in extra.other_day_picks(basket, day):
+        secs.append((head, [dict(time=ko_local(g).strftime("%H:%M"), league=g["lgName"], home=g["home"], away=g["away"],
+                                 pick=extra.other_label(g), prob=g["pick"]["prob"], min_odds=g["pick"]["minOdds"], tier=g["pick"]["tier"])
+                            for g in gs]))
     return secs, len(ms)
 
 
@@ -150,13 +154,39 @@ def all_matches_images(data, basket, day):
         for g in bk:
             gg = dict(g, time=ko_local(g).strftime("%H:%M"), home=_short(g["home"]), away=_short(g["away"]))
             blocks.append(PG.basket_row(gg, extra.basket_grade(g)))
+    oth = 0
+    for sport, head, picks_only in (("hokey", "Hokey · NHL (normal süre)", False), ("tenis", "Tenis · öneri olan maçlar", True)):
+        gs = extra.other_upcoming(basket, hours=24, sport=sport, picks_only=picks_only)
+        if gs:
+            blocks.append(("head", head)); oth += len(gs)
+            blocks += [_other_block(g) for g in gs]
     if not blocks:
         return []
-    n = len(ms) + len(bk)
-    return PG.paginate("BUGÜNÜN MAÇLARI", f"{tr_date(day)} · {n} maç (futbol + basketbol)", blocks, FOOT)
+    n = len(ms) + len(bk) + oth
+    return PG.paginate("BUGÜNÜN MAÇLARI", f"{tr_date(day)} · {n} maç (futbol, basketbol, hokey, tenis)", blocks, FOOT)
 
 
-def report_images(history, day, picks=None, live_bets=None):
+def _other_block(g):
+    pk = g.get("pick")
+    gg = dict(g, time=ko_local(g).strftime("%H:%M"), lg=g["lg"])
+    if g["sport"] == "tenis":
+        gg["home"], gg["away"] = extra._surname(g["home"]), extra._surname(g["away"])
+    return PG.other_row(gg, extra.other_label(g), pk["tier"] if pk else 0, pk["prob"] if pk else 0, pk["minOdds"] if pk else 0)
+
+
+def other_images(basket, sport):
+    gs = extra.other_upcoming(basket, hours=30, sport=sport, picks_only=(sport == "tenis"))
+    if not gs:
+        return []
+    title, sub, foot = {"hokey": ("HOKEY · NHL", "iddaa'da hokey maç sonucu normal süredir (uzatmasız)",
+                                  "Backtest (2025-26): 1X/X2 %75 üstü %84, 4,5 Üst %80 üstü %83 tuttu."),
+                        "tenis": ("TENİS · ATP / WTA", "Elo modeli; yalnızca öneri olan maçlar",
+                                  "Backtest (2024-26, 33 bin maç): %80 üstü favoriler %86, %70-80 arası %74 kazandı. Tenis için geçmiş oran yok; kârlılık test edilemedi, oran sınırına uy.")}[sport]
+    blocks = [_other_block(g) for g in gs]
+    return PG.paginate(title, sub, blocks, (foot,))
+
+
+def report_images(history, day, picks=None, live_bets=None, opicks=None, basket=None):
     done = [h for h in history if h.get("res") and ko_local(h).date() == day]
     rows, t = [], {3: [0, 0], 2: [0, 0]}
     for h in sorted(done, key=lambda h: h["ko"]):
@@ -169,7 +199,8 @@ def report_images(history, day, picks=None, live_bets=None):
         t[g["tier"]][0] += 1; t[g["tier"]][1] += ok
         rows.append(PG.result_row(h, g, ok, nm))
     lv = extra.live_day(live_bets, day)
-    if not rows and not lv:
+    orow = extra.other_day_results(opicks, basket, day)
+    if not rows and not lv and not orow:
         return []
     k = []
     for tier, name in ((3, "güçlü"), (2, "orta")):
@@ -179,6 +210,9 @@ def report_images(history, day, picks=None, live_bets=None):
     tot_n = t[3][0] + t[2][0]; tot_w = t[3][1] + t[2][1]
     if tot_n:
         k.append((f"%{round(100 * tot_w / tot_n)}", "maç öncesi tutma oranı", PG.INK))
+    if orow:
+        ow = sum(1 for _, _, ok in orow if ok)
+        k.append((f"{ow}/{len(orow)}", f"basketbol/hokey/tenis (%{round(100 * ow / len(orow))})", PG.GREEN if ow / len(orow) >= .7 else PG.AMBER))
     if lv:
         lw = sum(1 for b in lv if b["ok"])
         k.append((f"{lw}/{len(lv)}", f"canlı seçim tuttu (%{round(100 * lw / len(lv))})", PG.GREEN if lw / len(lv) >= .7 else PG.AMBER))
@@ -194,6 +228,12 @@ def report_images(history, day, picks=None, live_bets=None):
         for b in lv:
             h = dict(home=b["home"], away=b["away"], res=b["res"], lgName=f"{b['lgName']} · {b['minute']}'de verildi, skor {b['s0'][0]}-{b['s0'][1]}")
             blocks.append(PG.result_row(h, dict(label=b["label"], prob=b["prob"]), b["ok"], nm))
+    if orow:
+        blocks.append(("head", "Basketbol, hokey, tenis"))
+        for v, txt, ok in orow:
+            h = dict(home=v["home"] if v["sport"] != "tenis" else extra._surname(v["home"]), away=v["away"] if v["sport"] != "tenis" else extra._surname(v["away"]),
+                     res=["", ""], lgName=f"{v['lgName']} · {txt}")
+            blocks.append(PG.result_row(h, dict(label=v["label"], prob=v["prob"]), ok, nm))
     return PG.paginate("DÜNÜN KARNESİ", tr_date(day), blocks, ("Tek günlük sonuç şansa çok bağlıdır; asıl ölçü uzun dönem test.",))
 
 

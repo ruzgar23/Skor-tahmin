@@ -78,3 +78,12 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
   49 bin maçlık 8 sezonluk testte bu, Güçlü seçimlerin tutma oranını %79,7 → %80,5'e, Orta seçimlerinkini %65,2 → %66,4'e çıkardı.
 - Birim önerisi: Güçlü 1 birim, Orta ½ birim (1 birim = kasanın %2'si).
 - Yorgunluk, Avrupa maçı, sezon sonu motivasyonu, ilk 11 eksikleri ve lig bazlı ayar da test edildi; piyasa bunları zaten fiyatladığı için eklenmedi. Testler `backtest/` klasöründe.
+
+## Canlı karne, hokey ve tenis
+- Gönderilen canlı seçimler takip edilir. Tutan seçim için anında **WON** bildirimi gelir. Tüm canlı seçimler (tutan ve tutmayan) ertesi sabahki karnede yer alır.
+- **Hokey (NHL):** iddaa'da hokeyde maç sonucu normal süreye göre (uzatmasız) belirlenir. Olasılıklar DraftKings oranlarından, beraberliği gerçeğe göre artırılmış bir Poisson modeliyle hesaplanır.
+  2025-26 testinde 1X/X2 seçimleri %75 üstünde %84, 4,5 Üst seçimleri %80 üstünde %83 tuttu. Komut: `/hokey`.
+- **Tenis (ATP/WTA):** ESPN'deki ~46 bin tekler maçından Elo modeli (genel + yüzey). 2024-26 testinde %80 üstü favoriler %86, %70-80 arası favoriler %74 kazandı.
+  Tenis için geçmiş oran verisi olmadığından kârlılık test edilemedi. Komut: `/tenis`.
+- **NBA:** 2025-26 testinde (1.164 maç) Güçlü (≥%75) seçimler %82, Orta (%65-75) seçimler %73 kazandı. Handikap ve alt/üst ~%50 tuttuğu için bunlara öneri verilmez.
+- Testler `backtest/diger_sporlar/` klasöründe.

@@ -94,7 +94,7 @@ def basket_section(basket):
     if not gs:
         return ""
     picks = [g for g in gs if basket_grade(g)]
-    out = [f"🏀 <b>Basketbol</b> ({len(gs)} maç; favoriler testte %64–85 kazandı. Handikap ve alt/üst ~%50, öneri yok)"]
+    out = [f"🏀 <b>Basketbol</b> ({len(gs)} maç; favoriler testte: Güçlü %82, Orta %73 kazandı. Handikap ve alt/üst ~%50, öneri yok)"]
     out += [basket_line(g) for g in sorted(picks, key=lambda g: g["ko"])] or ["Bugün belirgin favori yok."]
     out.append("Tüm basketbol maçları: /basket")
     return "\n".join(out) + "\n"
@@ -418,3 +418,97 @@ def live_report_lines(bets, day):
     for b in rows:
         out.append(f"{'✅' if b['ok'] else '❌'} {e(nm(b['home']))} {b['res'][0]}-{b['res'][1]} {e(nm(b['away']))} · {e(b['label'])} ({b['minute']}') {pct(b['prob'])}")
     return out
+
+
+# ---------- hokey (NHL) ve tenis ----------
+def _surname(n):
+    return n.split()[-1] if n else n
+
+
+def other_label(g):
+    """iddaa'daki adıyla seçim etiketi."""
+    pk = g.get("pick")
+    if not pk:
+        return None
+    if g["sport"] == "tenis":
+        side = "1" if pk["winner"] == g["home"] else "2"
+        return f"MS {side} · {_surname(pk['winner']).upper()}"
+    return {"1X": "ÇİFTE ŞANS 1X", "X2": "ÇİFTE ŞANS X2", "4,5 Üst": "4,5 ÜST"}.get(pk["label"], pk["label"])
+
+
+def other_upcoming(basket, hours=26, sport=None, picks_only=False):
+    now = datetime.now(timezone.utc)
+    gs = [g for g in ((basket or {}).get("other") or {}).get("games", [])
+          if now < datetime.fromisoformat(g["ko"]) < now + timedelta(hours=hours)
+          and (sport is None or g["sport"] == sport) and (g.get("pick") or not picks_only)]
+    return sorted(gs, key=lambda g: g["ko"])
+
+
+def other_day_picks(basket, day, max_tennis_strong=6, max_tennis_mid=4):
+    """O günün hokey ve tenis seçimleri: [(bölüm, [(g, etiket)])]."""
+    # takvim günü yerine önümüzdeki 24 saat: NHL maçları Türkiye saatiyle gece oynanır
+    gs = other_upcoming(basket, hours=24, picks_only=True)
+    hk = [g for g in gs if g["sport"] == "hokey"]
+    tn = [g for g in gs if g["sport"] == "tenis"]
+    tn = (sorted([g for g in tn if g["pick"]["tier"] == 3], key=lambda g: -g["pick"]["prob"])[:max_tennis_strong]
+          + sorted([g for g in tn if g["pick"]["tier"] == 2], key=lambda g: -g["pick"]["prob"])[:max_tennis_mid])
+    return [("Hokey (NHL, normal süre)", hk), ("Tenis (ATP/WTA)", sorted(tn, key=lambda g: g["ko"]))]
+
+
+def other_list_message(basket, sport):
+    gs = other_upcoming(basket, hours=30, sport=sport, picks_only=(sport == "tenis"))
+    head = {"hokey": "🏒 <b>Hokey (NHL)</b> — iddaa'da hokey MS normal süredir", "tenis": "🎾 <b>Tenis seçimleri</b> (ATP/WTA, Elo modeli)"}[sport]
+    if not gs:
+        return head + "\n\nÖnümüzdeki 30 saatte " + ("seçim yok." if sport == "tenis" else "maç yok.")
+    out = [head, ""]
+    for g in gs:
+        lab = other_label(g)
+        out.append(f"{ko_local(g).strftime('%d.%m %H:%M')} · <b>{e(g['home'])} – {e(g['away'])}</b> <i>({e(g['lgName'])})</i>\n   {e(g['info'])}"
+                   + (f"\n   👉 OYNA: <b>{e(lab)}</b> · %{round(g['pick']['prob'] * 100)} · oran ≥ <b>{odds_fmt(g['pick']['minOdds'])}</b> ({core.TIERNAME[g['pick']['tier']]})" if lab else ""))
+    return "\n".join(out) + core.FOOTER
+
+
+def other_picks_store(basket, day):
+    """Karne için: günün NBA, hokey ve tenis seçimleri."""
+    out = {}
+    for sec, gs in other_day_picks(basket, day):
+        for g in gs:
+            pk = g["pick"]
+            out[g["id"]] = dict(sport=g["sport"], label=other_label(g), key=pk["label"], winner=pk.get("winner"), prob=pk["prob"],
+                                tier=pk["tier"], ko=g["ko"], home=g["home"], away=g["away"], lgName=g["lgName"], day=str(day))
+    for g in basket_upcoming(basket):
+        gr = basket_grade(g)
+        if gr:
+            out[g["id"]] = dict(sport="basketbol", label=gr["label"], key=gr["label"].split()[-1], prob=gr["prob"], tier=gr["tier"],
+                                ko=g["ko"], home=g["home"], away=g["away"], lgName=g["lg"], day=str(day))
+    return out
+
+
+def other_settle(v, basket):
+    """(sonuç metni, tuttu mu) ya da None."""
+    if v["sport"] == "basketbol":
+        r = next((g for g in (basket or {}).get("results", []) if g["id"] == v.get("id")), None)
+        if not r or not r.get("res"):
+            return None
+        a, b = r["res"]; return f"{a}-{b}", (a > b) == (v["key"] == "1")
+    res = next((g for g in ((basket or {}).get("other") or {}).get("results", []) if g["id"] == v.get("id")), None)
+    if not res:
+        return None
+    if v["sport"] == "tenis":
+        return f"kazanan {_surname(res['res_w'])}", res["res_w"] == v["winner"]
+    a, b = res["res"]; ot = res.get("ot")
+    import others
+    ok = others.nhl_settle(v["key"], [a, b], ot)
+    return (f"{a}-{b}" + (" (uzatma)" if ot else "")), ok
+
+
+def other_day_results(opicks, basket, day):
+    rows = []
+    for k, v in (opicks or {}).items():
+        if v.get("day") != str(day):
+            continue
+        r = v.get("result") or other_settle(dict(v, id=k), basket)
+        if r is None or r[1] is None:
+            continue
+        v["result"] = list(r); rows.append((v, r[0], r[1]))
+    return sorted(rows, key=lambda x: x[0]["ko"])

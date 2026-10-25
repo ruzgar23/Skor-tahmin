@@ -114,6 +114,29 @@ def basket_row(g, gr):
     return ("row", 118, draw)
 
 
+def other_row(g, label, tier, prob, min_odds):
+    """Hokey/tenis satırı: saat, lig, eşleşme, model özeti ve varsa seçim."""
+    def draw(d, y):
+        tw = 0
+        if label:
+            col, soft, _, stars = TIER[tier]
+            txt = f"{stars} {label}"
+            tw = min(int(d.textlength(txt, font=F(18, True))) + 26, 400)
+            sub = f"%{round(prob * 100)} · oran ≥ {_odds(min_odds)}"
+            tw = max(tw, int(d.textlength(sub, font=F(18, True))) + 2)
+        room = (W - 60 - tw - 20 - 190) if label else 800
+        d.text((60, y + 18), g["time"], font=F(26, True), fill=INK)
+        d.text((60, y + 54), _fit(d, g["lg"], F(16), 110), font=F(16), fill=MUTED)
+        d.text((190, y + 14), _fit(d, f"{g['home']} – {g['away']}", F(26, True), room), font=F(26, True), fill=INK)
+        d.text((190, y + 60), _fit(d, g["info"], F(18), room), font=F(18), fill=MUTED)
+        if label:
+            bt = _fit(d, txt, F(18, True), tw - 25)
+            bw = int(d.textlength(bt, font=F(18, True))) + 24
+            _badge(d, W - 60 - bw, y + 12, bt, col, soft, 18)
+            d.text((W - 60 - d.textlength(sub, font=F(18, True)), y + 58), sub, font=F(18, True), fill=col)
+    return ("row", 104, draw)
+
+
 # ---------- karne ----------
 def result_row(h, g, ok, nm):
     def draw(d, y):

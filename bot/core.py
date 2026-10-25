@@ -42,6 +42,11 @@ def pct(x):
     return f"%{round(x * 100)}"
 
 
+def tr_up(s):
+    """Türkçe büyük harf (i → İ)."""
+    return s.replace("i", "İ").upper()
+
+
 def odds_fmt(x):
     return f"{x:.2f}".replace(".", ",")
 
@@ -183,9 +188,14 @@ def match_message(data, q):
     return "\n".join(lines) + link_line()
 
 
-def report_message(history, day, picks=None, live_bets=None):
+def report_message(history, day, picks=None, live_bets=None, opicks=None, basket=None):
     import extra
     lv = extra.live_report_lines(live_bets, day)
+    orow = extra.other_day_results(opicks, basket, day)
+    if orow:
+        ow = sum(1 for _, _, ok in orow if ok)
+        lv = [f"\n🏀🏒🎾 <b>Basketbol, hokey, tenis:</b> {len(orow)} seçimin {ow}'i tuttu ({pct(ow / len(orow))})"] + [
+            f"{'✅' if ok else '❌'} {e(v['home'])} – {e(v['away'])} · {e(v['label'])} {pct(v['prob'])} · {e(txt)}" for v, txt, ok in orow] + lv
     done = [h for h in history if h.get("res") and ko_local(h).date() == day]
     if not done and not lv:
         return None
@@ -211,7 +221,8 @@ def report_message(history, day, picks=None, live_bets=None):
     if ts:
         (n1, w1), (n0, w0) = ts["ok"], ts["bad"]
         head.append(f"Maç önü teyit: {n1} teyitli seçimin {w1}'i tuttu" + (f"; iptal edilen {n0} seçimin {w0}'i tuttu" if n0 else ""))
-    return "\n".join(head) + "\n\n" + "\n".join(rows) + "\n".join([""] + lv) + "\n\n<i>Tek günlük sonuç şansa çok bağlıdır.</i>"
+    parts = ["\n".join(head)] + (["\n".join(rows)] if rows else []) + (["\n".join(lv).strip()] if lv else [])
+    return "\n\n".join(parts) + "\n\n<i>Tek günlük sonuç şansa çok bağlıdır.</i>"
 
 
 def live_alert_message(alerts):
@@ -246,12 +257,12 @@ HELP = ("<b>Skor Tahmin Botu</b>\n"
         "Her sabah günün maç önerilerini, maç sırasında canlı fırsat adaylarını ve günün karnesini gönderir.\n\n"
         "/secimler – günün seçimleri (görsel)\n/nasil – nasıl oynanır\n"
         "/bugun – bugünün tüm maçları\n/guclu – güçlü öneriler\n/orta – orta öneriler\n"
-        "/canli – şu an oynanan maçlar\n/mac galatasaray – tek maçın ayrıntısı\n/basket – basketbol maçları\n"
-        "/kupon – kuponunu değerlendir (her satıra: takım seçim oran)\n/karne – dünün sonuçları\n"
+        "/canli – şu an oynanan maçlar\n/mac galatasaray – tek maçın ayrıntısı\n/basket – basketbol · /hokey – NHL · /tenis – tenis\n"
+        "/kupon – kuponunu değerlendir (her satıra: takım seçim oran)\n/karne – dünün sonuçları (canlı ve diğer sporlar dahil)\n"
         "/dur – bildirimleri kapat · /start – tekrar aç\n\n"
         "<i>Komutlara birkaç dakika içinde cevap verilir. Olasılıklar garanti değildir.</i>")
 
 COMMANDS = [("secimler", "Günün seçimleri (görsel)"), ("nasil", "Nasıl oynanır"), ("bugun", "Bugünün tüm maçları"), ("guclu", "Güçlü öneriler"), ("orta", "Orta öneriler"),
-            ("canli", "Şu an oynanan maçlar"), ("mac", "Tek maç: /mac takım"), ("basket", "Basketbol maçları"),
+            ("canli", "Şu an oynanan maçlar"), ("mac", "Tek maç: /mac takım"), ("basket", "Basketbol maçları"), ("hokey", "Hokey (NHL) maçları"), ("tenis", "Tenis seçimleri"),
             ("kupon", "Kupon değerlendir"), ("karne", "Dünün sonuçları"),
             ("dur", "Bildirimleri kapat"), ("yardim", "Yardım")]

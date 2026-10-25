@@ -22,6 +22,7 @@ import tg, core, extra, visual  # noqa: E402
 SITE = os.environ.get("SITE_DIR", os.path.join(ROOT, "site-out"))
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(ROOT, "state"))
 FD = os.environ.get("FD_DIR", os.path.join(ROOT, "fd"))
+os.environ.setdefault("FD_DIR", FD)  # tenis Elo durumu da burada saklanır
 SUBS_FILE = os.path.join(STATE_DIR, "subs", "subs.json")   # yalnızca komut işi yazar
 RUN_FILE = os.path.join(STATE_DIR, "run", "run.json")      # sabah ve canlı işleri yazar
 CMD_SECONDS = int(os.environ.get("CMD_SECONDS", "560"))
@@ -90,6 +91,13 @@ def broadcast_rich(st, pngs, text, caption=None, silent=False):
         broadcast(st, text, silent=silent)
 
 
+def bk():
+    """basket.json + diğer sporlar (other.json) tek sözlükte: görsellere tek parametreyle gider."""
+    b = jload("basket.json", {}) or {}
+    b["other"] = jload("other.json", {}) or {}
+    return b
+
+
 def jload(name, default=None):
     try:
         return json.load(open(os.path.join(SITE, name)))
@@ -102,7 +110,7 @@ def now_ist():
 
 
 # ---------- site (gh-pages) ----------
-SITE_FILES_DAILY = ["index.html", "backtest.json", ".nojekyll", "config.json", "data.json", "history.json", "basket.json"]
+SITE_FILES_DAILY = ["index.html", "backtest.json", ".nojekyll", "config.json", "data.json", "history.json", "basket.json", "other.json"]
 
 
 def publish(msg, files):
@@ -148,7 +156,7 @@ def handle_commands(st, wait=0):
     ups = tg.updates(st.get("offset", 0), wait)
     if not ups:
         return False
-    data = jload("data.json", {"matches": []}); hist = jload("history.json", {"matches": []}); basket = jload("basket.json", {})
+    data = jload("data.json", {"matches": []}); hist = jload("history.json", {"matches": []}); basket = bk()
     for u in ups:
         st["offset"] = u["update_id"] + 1
         msg = u.get("message") or {}
@@ -200,7 +208,10 @@ def handle_commands(st, wait=0):
                                 r = extra.basket_match(basket, arg.strip()) or r
                             tg.send(chat, r)
             elif cmd == "/basket":
-                reply(chat, imgs_or(visual.all_matches_images, {"matches": []}, basket, today), extra.basket_message(basket))
+                reply(chat, imgs_or(visual.all_matches_images, {"matches": []}, dict(basket, other={}), today), extra.basket_message(basket))
+            elif cmd in ("/hokey", "/tenis"):
+                sp = cmd[1:]
+                reply(chat, imgs_or(visual.other_images, basket, sp), extra.other_list_message(basket, sp))
             elif cmd == "/kupon":
                 if not arg.strip():
                     tg.send(chat, extra.COUPON_HELP)
@@ -208,9 +219,9 @@ def handle_commands(st, wait=0):
                     reply(chat, imgs_or(visual.coupon_images, data, basket, arg), extra.coupon_message(data, basket, arg))
             elif cmd == "/karne":
                 y = today - timedelta(days=1)
-                rs = _load(RUN_FILE, {}); pk = rs.get("picks", {}); lb = rs.get("live_bets", {})
-                reply(chat, imgs_or(visual.report_images, hist["matches"], y, pk, lb),
-                      core.report_message(hist["matches"], y, pk, lb) or "Dün için sonuçlanmış öneri yok.")
+                rs = _load(RUN_FILE, {}); pk = rs.get("picks", {}); lb = rs.get("live_bets", {}); op = rs.get("opicks", {})
+                reply(chat, imgs_or(visual.report_images, hist["matches"], y, pk, lb, op, basket),
+                      core.report_message(hist["matches"], y, pk, lb, op, basket) or "Dün için sonuçlanmış öneri yok.")
             else:
                 tg.send(chat, core.HELP)
         except Exception:
@@ -235,15 +246,16 @@ def daily_body(st):
     hist = jload("history.json", {"matches": []})
     if st["sent"].get("report") != str(today - timedelta(days=1)):
         y = today - timedelta(days=1)
-        pk = st.get("picks", {}); lb = st.get("live_bets", {})
-        broadcast_rich(st, imgs_or(visual.report_images, hist["matches"], y, pk, lb), core.report_message(hist["matches"], y, pk, lb), silent=True)
+        pk = st.get("picks", {}); lb = st.get("live_bets", {}); op = st.get("opicks", {}); b = bk()
+        broadcast_rich(st, imgs_or(visual.report_images, hist["matches"], y, pk, lb, op, b),
+                       core.report_message(hist["matches"], y, pk, lb, op, b), silent=True)
         st["sent"]["report"] = str(today - timedelta(days=1))
     if st["sent"].get("daily") != str(today):
-        data = jload("data.json"); basket = jload("basket.json", {})
+        data = jload("data.json"); basket = bk()
         broadcast_rich(st, imgs_or(visual.daily_images, data, basket, today),
                        visual.daily_text(data, basket, today) + core.FOOTER, caption=visual.how_to())
         broadcast_rich(st, imgs_or(visual.all_matches_images, data, basket, today), "",
-                       caption="Bugünün tüm maçları (futbol + basketbol). Ayrıntı için /mac takım", silent=True)
+                       caption="Bugünün tüm maçları (futbol, basketbol, hokey, tenis). Ayrıntı için /mac takım", silent=True)
         st["sent"]["daily"] = str(today)
     remember_picks(st, today)
     check_moves(st)
@@ -253,6 +265,12 @@ def remember_picks(st, today):
     """Günlük mesajdaki seçimleri maç önü teyit için saklar (günde bir kez)."""
     if st["sent"].get("daily") != str(today) or st.get("picks_day") == str(today):
         return
+    op = st.setdefault("opicks", {})
+    for k, v in extra.other_picks_store(bk(), today).items():
+        op.setdefault(k, v)
+    cut = (datetime.now(timezone.utc) - timedelta(days=4)).isoformat()
+    for k in [k for k, v in op.items() if v["ko"] < cut]:
+        del op[k]
     picks = st.setdefault("picks", {})
     for k, v in extra.daily_picks(jload("data.json", {"matches": []}), today).items():
         picks.setdefault(k, v)

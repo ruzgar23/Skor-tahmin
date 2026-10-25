@@ -315,6 +315,11 @@ def main(datadir, outpath, skip_download=False, prev=None, histpath=None, seed=N
         nba.scan(os.path.join(os.path.dirname(outpath) or ".", "basket.json"))
     except Exception as e:
         print("Basketbol taranamadı:", e)
+    try:
+        import others
+        others.scan(os.path.join(os.path.dirname(outpath) or ".", "other.json"))
+    except Exception as e:
+        print("Hokey/tenis taranamadı:", e)
     last_result = max((m["date"] for m in matches), default=None)
     data = dict(generated=now.isoformat(), resultsUpTo=last_result.isoformat() if last_result else None,
                 fixtures=dict(start=out[0]["ko"][:10] if out else None, end=out[-1]["ko"][:10] if out else None),
