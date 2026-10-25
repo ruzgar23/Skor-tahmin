@@ -342,6 +342,72 @@ def live_tick(st):
     return len(lv["matches"])
 
 
+def football_final(lg, home, away, ko):
+    """ESPN'den biten futbol maçının skoru ya da None."""
+    import espn
+    slug = espn.SLUG.get(lg) or espn.CUPS.get(lg)
+    if not slug:
+        return None
+    for d in sorted({ko.date(), (ko + timedelta(hours=3)).date()}):
+        try:
+            j = espn.get(slug, d)
+        except Exception:
+            continue
+        for ev in j.get("events", []):
+            if ev["status"]["type"]["state"] != "post":
+                continue
+            c = ev["competitions"][0]; sd = {x["homeAway"]: x for x in c["competitors"]}
+            if espn.match_name(sd["home"]["team"]["displayName"], {home}) == home and espn.match_name(sd["away"]["team"]["displayName"], {away}) == away:
+                try:
+                    return [int(sd["home"]["score"]), int(sd["away"]["score"])]
+                except (KeyError, ValueError, TypeError):
+                    return None
+    return None
+
+
+def results_tick(st):
+    """Günün seçimlerinden biten maçları bildirir (WON / LOST). Dönüş: durum değişti mi."""
+    now = datetime.now(timezone.utc); items = []
+    for k, v in st.get("picks", {}).items():  # futbol
+        ko = datetime.fromisoformat(v["ko"])
+        if v.get("rnote") or now < ko + timedelta(minutes=110):
+            continue
+        if now > ko + timedelta(hours=8):
+            v["rnote"] = "zaman aşımı"; continue
+        res = football_final(v.get("lg") or k.split("-")[0], v["home"], v["away"], ko)
+        if not res:
+            continue
+        ok = core.settle(core.LABEL2KEY[v["label"]], res)
+        v["rnote"] = "ok"
+        if ok is not None:
+            items.append((dict(v, _res=res), f"{res[0]}-{res[1]}", ok))
+    op = st.get("opicks", {})
+    pend = [v for v in op.values() if not v.get("rnote") and now > datetime.fromisoformat(v["ko"]) + timedelta(minutes=100)]
+    if pend:
+        other = jload("other.json", {}) or {}
+        gen = other.get("generated")
+        if not gen or now - datetime.fromisoformat(gen) > timedelta(minutes=30):
+            try:
+                import nba, others
+                nba.scan(os.path.join(SITE, "basket.json")); others.scan(os.path.join(SITE, "other.json"))
+            except Exception:
+                traceback.print_exc()
+        b = bk()
+        for k, v in op.items():
+            if v.get("rnote") or now < datetime.fromisoformat(v["ko"]) + timedelta(minutes=100):
+                continue
+            if now > datetime.fromisoformat(v["ko"]) + timedelta(hours=12):
+                v["rnote"] = "zaman aşımı"; continue
+            r = extra.other_settle(dict(v, id=k), b)
+            if r is None or r[1] is None:
+                continue
+            v["rnote"] = "ok"; v["result"] = list(r)
+            items.append((v, r[0], r[1]))
+    if items:
+        broadcast_rich(st, imgs_or(visual.results_images, items), extra.results_message(items), silent=True)
+    return bool(items)
+
+
 def settle_live(st, live_by_id):
     """Bildirilen canlı seçimleri skor geldikçe sonuçlandırır; tutanlar için anında WON bildirimi."""
     import espn
@@ -382,8 +448,7 @@ def settle_live(st, live_by_id):
         if r is None:
             continue
         b["ok"] = r; b["res"] = score; b["done_at"] = now.isoformat()
-        if r:
-            won.append(b)
+        won.append(b)  # tutan da tutmayan da bildirilir
     for b in bets.values():  # erken kazanılanlarda karne için son skoru tamamla
         if b.get("ok") is True and b.get("eid") in by_eid:
             b["res"] = by_eid[b["eid"]]["score"]
@@ -458,7 +523,7 @@ def bot():
     bir sonrakini kendisi başlatır."""
     subs = _load(SUBS_FILE, {"offset": 0, "subs": {}}); subs.setdefault("offset", 0); subs.setdefault("subs", {})
     st = load_state(); st["subs"] = subs["subs"]  # yeni aboneler hemen bildirim alır
-    start = time.time(); last_live = 0.0; live_active = True
+    start = time.time(); last_live = 0.0; live_active = True; last_res = 0.0
     while time.time() - start < BOT_SECONDS:
         try:
             now = now_ist(); today = now.date()
@@ -471,6 +536,10 @@ def bot():
             remember_picks(st, today)
             if teyit(st):
                 save_state(st)
+            if time.time() - last_res >= LOOP_EVERY:
+                last_res = time.time()
+                if results_tick(st):
+                    save_state(st)
             if time.time() - last_live >= LOOP_EVERY:
                 last_live = time.time()
                 if live_active or upcoming_soon(jload("data.json", {"matches": []})):

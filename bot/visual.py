@@ -325,8 +325,31 @@ def live_won_images(items):
     if not items:
         return []
     blocks = []
-    for b in items:
+    for b in sorted(items, key=lambda b: not b["ok"]):
         h = dict(home=b["home"], away=b["away"], res=b["res"], lgName=f"{b['lgName']} · {b['minute']}'de verildi, skor {b['s0'][0]}-{b['s0'][1]}")
-        blocks.append(PG.result_row(h, dict(label=b["label"], prob=b["prob"]), True, nm))
-    return PG.paginate("WON · CANLI SEÇİM TUTTU", f"{len(items)} canlı seçim kazandı", blocks,
-                       ("Canlı seçimlerin tamamı (tutan ve tutmayan) ertesi sabah karnede.",), accent=(29, 107, 71))
+        blocks.append(PG.result_row(h, dict(label=b["label"], prob=b["prob"]), b["ok"], nm))
+    w = sum(1 for b in items if b["ok"])
+    if w == len(items):
+        title, acc = "WON · CANLI SEÇİM TUTTU", (29, 107, 71)
+    elif w == 0:
+        title, acc = "LOST · CANLI SEÇİM TUTMADI", (163, 64, 44)
+    else:
+        title, acc = "CANLI SEÇİM SONUÇLARI", (21, 33, 43)
+    return PG.paginate(title, f"{w} tuttu · {len(items) - w} tutmadı", blocks,
+                       ("Canlı seçimlerin tamamı ertesi sabah karnede de yer alır.",), accent=acc)
+
+
+def results_images(items):
+    """Günün seçimlerinden biten maçlar: [(v, sonuç metni, tuttu mu)]."""
+    if not items:
+        return []
+    blocks = []
+    for v, txt, ok in items:
+        tn = v.get("sport") == "tenis"
+        sub = (v["lgName"] if v.get("_res") else f"{v['lgName']} · {txt}") + (" · maç önü iptal edilmişti" if v.get("ok") is False and v.get("sport") is None else "")
+        h = dict(home=extra._surname(v["home"]) if tn else v["home"], away=extra._surname(v["away"]) if tn else v["away"],
+                 res=v["_res"] if v.get("_res") else ["", ""], lgName=sub)
+        blocks.append(PG.result_row(h, dict(label=v["label"], prob=v["prob"]), ok, nm))
+    w = sum(1 for _, _, ok in items if ok)
+    return PG.paginate("MAÇ SONUÇLARI", f"{w} seçim tuttu (WON) · {len(items) - w} tutmadı (LOST)", blocks,
+                       ("Tüm gün ertesi sabah karnede.",), accent=(21, 33, 43))

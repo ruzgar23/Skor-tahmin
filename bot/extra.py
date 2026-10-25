@@ -329,7 +329,7 @@ def daily_picks(data, day, max_mid=8):
     strong = [x for x in graded if x[1] and x[1]["tier"] == 3]
     mid = sorted([x for x in graded if x[1] and x[1]["tier"] == 2], key=lambda x: -x[1]["prob"])[:max_mid]
     return {m["id"]: dict(fam=g["fam"], label=g["label"], prob=g["prob"], tier=g["tier"], ko=m["ko"],
-                          home=m["home"], away=m["away"], lgName=m["lgName"], minOdds=g["minOdds"])
+                          home=m["home"], away=m["away"], lgName=m["lgName"], minOdds=g["minOdds"], lg=m["lg"])
             for m, g in strong + mid}
 
 
@@ -397,10 +397,29 @@ def live_settle(k, s0, s, final):
 
 
 def live_won_message(items):
-    out = ["🏆 <b>WON — canlı seçim tuttu!</b>"]
-    for b in items:
-        out.append(f"\n✅ <b>{e(nm(b['home']))} {b['res'][0]}-{b['res'][1]} {e(nm(b['away']))}</b> <i>({e(b['lgName'])})</i>\n"
-                   f"   {e(b['label'])} · {b['minute']}'de %{round(b['prob'] * 100)} ile verilmişti")
+    won = [b for b in items if b["ok"]]; lost = [b for b in items if not b["ok"]]
+    out = []
+    if won:
+        out.append("🏆 <b>WON — canlı seçim tuttu!</b>")
+        for b in won:
+            out.append(f"✅ <b>{e(nm(b['home']))} {b['res'][0]}-{b['res'][1]} {e(nm(b['away']))}</b> <i>({e(b['lgName'])})</i>\n"
+                       f"   {e(b['label'])} · {b['minute']}'de %{round(b['prob'] * 100)} ile verilmişti")
+    if lost:
+        out.append(("\n" if won else "") + "❌ <b>LOST — canlı seçim tutmadı</b>")
+        for b in lost:
+            out.append(f"❌ <b>{e(nm(b['home']))} {b['res'][0]}-{b['res'][1]} {e(nm(b['away']))}</b> <i>({e(b['lgName'])})</i>\n"
+                       f"   {e(b['label'])} · {b['minute']}'de %{round(b['prob'] * 100)} ile verilmişti")
+    return "\n".join(out)
+
+
+def results_message(items):
+    """items: [(v, sonuç metni, tuttu mu)] — günün seçimlerinden biten maçlar."""
+    w = sum(1 for _, _, ok in items if ok)
+    out = [f"📣 <b>Maç sonuçları</b> · {len(items)} seçimin {w}'i tuttu"]
+    for v, txt, ok in items:
+        tag = " <i>(maç önü iptal edilmişti)</i>" if v.get("ok") is False and v.get("sport") is None else ""
+        out.append(f"{'✅ WON' if ok else '❌ LOST'} · <b>{e(nm(v['home']))} – {e(nm(v['away']))}</b> {e(txt)}\n"
+                   f"   {e(v['label'])} %{round(v['prob'] * 100)}{tag}")
     return "\n".join(out)
 
 
