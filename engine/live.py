@@ -1,7 +1,7 @@
 """Canlı analiz: o an oynanan maçları ESPN'den alır, maç öncesi gol beklentisini kalan süreye,
 skora ve kırmızı kartlara göre günceller; live.json yazar.
 Kullanım:  python3 live.py <data.json> <live.json>"""
-import sys, json, math, re
+import sys, os, json, math, re
 from datetime import datetime, timedelta, timezone
 import numpy as np
 import engine as E
@@ -13,6 +13,13 @@ STATE = {-2: 1.10, -1: 1.15, 0: 1.00, 1: 0.95, 2: 0.95}  # 13.598 maçlık devre
 RED_OWN, RED_OPP = 0.67, 1.25
 HT_SHARE = 0.46
 RHO = -0.06
+KGY_FIX = 0.02  # devre arası testinde (29.368 maç) KG Yok olasılığı ~2 puan iyimserdi
+
+# Canlı korner (backtest/live_corner_test.py, ESPN anlatımlarından 7.092 maç, 2023-25 öğrenme / 2025-26 test).
+# Kalan korner (her takım) = kalan_süre * [(1-w)*maç öncesi beklenti + w*maç içi tempo] * skor durumu * kırmızı kart;
+# toplam negatif binom. 55–80. dakika seçimleri testte %83,4 tuttu (beklenen %83,5).
+CORNER = dict(share=0.922, w=0.1654, behind=0.1573, ahead=-0.2363, red_own=-0.4209, red_opp=0.4693, stop=6.75, r=24.05)
+CORNER_MIN, CORNER_MAX = 55, 80
 
 
 def minute_of(status):
@@ -123,7 +130,7 @@ def picks_for(p, tl, minute, mkt, cur_goals=0):
     cand = []
     for k in ("1", "X", "2", "1X", "X2", "12"):
         cand.append((k, LABELS[k], p[k]))
-    cand += [("BTTS", LABELS["BTTS"], p["BTTS"]), ("NBTTS", LABELS["NBTTS"], 1 - p["BTTS"]),
+    cand += [("BTTS", LABELS["BTTS"], p["BTTS"]), ("NBTTS", LABELS["NBTTS"], 1 - p["BTTS"] - KGY_FIX),
              ("GOAL", LABELS["GOAL"], 1 - p["NOGOAL"]), ("NOGOAL", LABELS["NOGOAL"], p["NOGOAL"])]
     for line, po in tl.items():
         cand += [(f"O{line}", f"{line.replace('.', ',')} Üst", po), (f"U{line}", f"{line.replace('.', ',')} Alt", 1 - po)]
@@ -146,6 +153,53 @@ def picks_for(p, tl, minute, mkt, cur_goals=0):
     # tekrarları azalt: çifte şans, MS seçimi varsa gereksiz; en fazla 3 aday
     out.sort(key=lambda x: (x["warn"] is not None, -x["prob"]))
     return out[:2]
+
+
+def corner_pick(pre_h, pre_a, ch, ca, hs, as_, minute, period, rh=0, ra=0):
+    """Canlı korner alt/üst seçimi (yalnızca ikinci yarı, 55–80. dakika). pre_*: maç öncesi korner beklentisi."""
+    if period < 2 or minute is None or not (CORNER_MIN <= minute <= CORNER_MAX) or not pre_h or not pre_a:
+        return None
+    from scipy.stats import nbinom
+    k = CORNER; t = float(minute)
+    rem = max(90 - t + k["stop"], 0) / 90 * k["share"]
+    w = k["w"] * t / 90
+    bh = (1 - w) * pre_h + w * ch / (t / 90); ba = (1 - w) * pre_a + w * ca / (t / 90)
+    d = max(-2, min(2, hs - as_))
+    sh = math.exp(k["behind"] * max(-d, 0) + k["ahead"] * max(d, 0))
+    sa = math.exp(k["behind"] * max(d, 0) + k["ahead"] * max(-d, 0))
+    mh = rem * bh * sh * math.exp(k["red_own"] * rh + k["red_opp"] * ra)
+    ma = rem * ba * sa * math.exp(k["red_own"] * ra + k["red_opp"] * rh)
+    mt = mh + ma; r = k["r"]; cur = ch + ca
+    best = None
+    for j in range(7):
+        line = cur + j + 0.5
+        po = float(1 - nbinom.cdf(j, r, r / (r + mt)))  # kalan korner ≥ j+1
+        for key, lab, pr in ((f"CO{line}", "Üst", po), (f"CU{line}", "Alt", 1 - po)):
+            if 0.70 <= pr <= 0.88 and (best is None or pr > best["prob"]):
+                best = dict(k=key, label=f"Korner {str(line).replace('.', ',')} {lab}", prob=round(pr, 4),
+                            minOdds=round(1.05 / pr, 2), warn=None, exp=round(cur + mt, 1))
+    return best
+
+
+def team_cards(c):
+    """Sarı ve kırmızı kart sayıları (ev, dep) — maç olay listesinden."""
+    ids = {x["homeAway"]: str((x.get("team") or {}).get("id") or x.get("id")) for x in c["competitors"]}
+    y = {"home": 0, "away": 0}
+    for d in c.get("details") or []:
+        if d.get("yellowCard"):
+            tid = str((d.get("team") or {}).get("id"))
+            for side, i in ids.items():
+                if tid == i:
+                    y[side] += 1
+    return y["home"], y["away"]
+
+
+def corners_of(c):
+    sd = {x["homeAway"]: x for x in c["competitors"]}
+    try:
+        return [int(stats_of(sd["home"])["wonCorners"]), int(stats_of(sd["away"])["wonCorners"])]
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def team_reds(c):
@@ -173,14 +227,37 @@ def consistent(m):
     return max(abs(mk[k] - m["p"][k]) for k in "1X2") <= 0.06
 
 
-def main(datapath, outpath, prevpath=None):
+def log_snapshots(logdir, out, now, seen):
+    """Canlı maç verisini biriktirir (ileride korner, kart ve gol dakikası testleri için).
+    Her maç için yalnızca değişen anlar yazılır: ay başına bir JSONL dosyası (state/run/live_log/AAAA-AA.jsonl)."""
+    os.makedirs(logdir, exist_ok=True)
+    rows = []
+    for m in out:
+        st = m.get("stats") or [{}, {}]
+        snap = [m["minute"], m["period"], *m["score"], *(m.get("corners") or [None, None]), *(m.get("cards") or [None, None]),
+                *m["reds"], st[0].get("totalShots"), st[1].get("totalShots"), st[0].get("shotsOnTarget"), st[1].get("shotsOnTarget")]
+        key = str(m["eid"]); sig = json.dumps(snap[2:])
+        if seen.get(key) == sig:
+            continue
+        seen[key] = sig
+        rows.append(dict(t=now.isoformat(timespec="seconds"), eid=m["eid"], lg=m["lg"], home=m["home"], away=m["away"],
+                         pre=m["pre"]["lam"], s=snap))
+    if rows:
+        with open(os.path.join(logdir, f"{now:%Y-%m}.jsonl"), "a", encoding="utf-8") as fh:
+            for r in rows:
+                fh.write(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n")
+    # artık canlı olmayan maçların imzalarını unut
+    return {k: v for k, v in seen.items() if k in {str(m["eid"]) for m in out}}
+
+
+def main(datapath, outpath, prevpath=None, logdir=None):
     now = datetime.now(timezone.utc)
-    notified = {}
+    notified = {}; seen = {}
     if prevpath:
         try:
             pv = json.load(open(prevpath))
             if datetime.fromisoformat(pv["generated"]) > now - timedelta(hours=12):
-                notified = pv.get("notified", {})
+                notified = pv.get("notified", {}); seen = pv.get("logseen", {})
         except Exception:
             pass
     try:
@@ -190,7 +267,8 @@ def main(datapath, outpath, prevpath=None):
     names, lam_idx = {}, {}
     for m in data["matches"]:
         names.setdefault(m["lg"], set()).update([m["home"], m["away"]])
-        lam_idx[(m["lg"], m["home"], m["away"])] = (m["lam"][0], m["lam"][1], m.get("id"), m["p"])
+        cor = m.get("corners") or {}
+        lam_idx[(m["lg"], m["home"], m["away"])] = (m["lam"][0], m["lam"][1], m.get("id"), m["p"], (cor.get("home"), cor.get("away")))
     days = sorted({now.date(), (now - timedelta(hours=6)).date()})
     slugs = {**espn.SLUG, **espn.CUPS}
     espn.prefetch([(s, d) for s in slugs.values() for d in days])
@@ -216,6 +294,10 @@ def main(datapath, outpath, prevpath=None):
             rh, ra = team_reds(c)
             p, tl, top, rest, rem = inplay(lams[0], lams[1], hs, as_, minute, period, rh, ra)
             mkt = live_market(c)
+            cor = corners_of(c)
+            cpk = None
+            if cor and hit and lg in TOP:
+                cpk = corner_pick(hit[4][0], hit[4][1], cor[0], cor[1], hs, as_, minute, period, rh, ra)
             lgname = espn.CUP_NAMES.get(lg) or E.LEAGUE_NAMES.get(lg, lg)
             out.append(dict(
                 id=(hit[2] if hit and hit[2] else f"{lg}-{ev['id']}"), eid=ev["id"], slug=slug, lg=lg, lgName=lgname,
@@ -225,14 +307,20 @@ def main(datapath, outpath, prevpath=None):
                 pre=dict(lam=[round(lams[0], 3), round(lams[1], 3)], src=src, p=(hit[3] if hit else None)),
                 rest=rest, p={k: round(v, 4) for k, v in p.items()}, totals={k: round(v, 4) for k, v in tl.items()},
                 top=top, market=mkt, picks=picks_for(p, tl, minute, mkt, hs + as_),
+                corners=cor, cards=list(team_cards(c)), cpicks=[cpk] if cpk else [],
             ))
     out.sort(key=lambda m: (-len(m["picks"]), -m["minute"]))
     alerts = []
     for m in out:
         m["consistent"] = consistent(m)
+        # korner: maç başına bir kez (gol seçiminden bağımsız); maç öncesi korner beklentisi olan üst liglerde
+        for pk in m["cpicks"]:
+            if not any(k.startswith(m["id"] + "|C") for k in notified):
+                notified[f"{m['id']}|{pk['k']}"] = now.isoformat()
+                alerts.append((m, pk))
         if not m["consistent"] or m["lg"] not in TOP:
             continue
-        if any(k.startswith(m["id"] + "|") for k in notified):
+        if any(k.startswith(m["id"] + "|") and not k.startswith(m["id"] + "|C") for k in notified):
             continue  # aynı maç için bir kez bildir
         for pk in m["picks"]:
             if pk["warn"]:
@@ -240,7 +328,12 @@ def main(datapath, outpath, prevpath=None):
             notified[f"{m['id']}|{pk['k']}"] = now.isoformat()
             alerts.append((m, pk))
             break
-    json.dump(dict(generated=now.isoformat(), matches=out, notified=notified,
+    if logdir:
+        try:
+            seen = log_snapshots(logdir, out, now, seen)
+        except Exception as e:  # kayıt hatası canlı analizi durdurmasın
+            print("canlı kayıt yazılamadı:", e)
+    json.dump(dict(generated=now.isoformat(), matches=out, notified=notified, logseen=seen,
                    alerts=[dict(id=m["id"], k=pk["k"]) for m, pk in alerts]),
               open(outpath, "w"), ensure_ascii=False, separators=(",", ":"))
     for m, pk in alerts[:6]:

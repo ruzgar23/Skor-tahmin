@@ -25,7 +25,7 @@ TR = {"Besiktas": "Beşiktaş", "Fenerbahce": "Fenerbahçe", "Goztep": "Göztepe
 TIER_LG = {"UCL": 0, "UEL": 0, "UECL": 0, "E0": 1, "SP1": 1, "I1": 1, "D1": 1, "F1": 1, "T1": 1, "N1": 1, "P1": 1,
            "SC0": 1, "G1": 1, "E1": 2, "SP2": 2, "I2": 2, "D2": 2, "F2": 2, "SC1": 2, "E2": 3, "E3": 3, "SC2": 3, "SC3": 3}
 TIERNAME = {3: "Güçlü", 2: "Orta", 1: "Düşük güven"}
-HIT = {("MS", 3): .80, ("MS", 2): .67, ("O25", 3): .74, ("O25", 2): .65, ("U25", 2): .63, ("KGV", 2): .64}
+HIT = {("MS", 3): .80, ("MS", 2): .67, ("O25", 2): .65, ("U25", 2): .63, ("KGV", 2): .64}
 UNIT = {3: "1 birim", 2: "½ birim"}
 LABEL2KEY = {"MS 1": "1", "MS X": "X", "MS 2": "2", "2,5 Üst": "O25", "2,5 Alt": "U25", "KG Var": "BTTS", "KG Yok": "NBTTS"}
 
@@ -60,8 +60,8 @@ def grade(m):
     p = m["p"]; msk, msp = pick_of(m); c = []
     if msp >= .70: c.append(("MS", msk, msp, 3))
     elif msp >= .60: c.append(("MS", msk, msp, 2))
-    if p["O25"] >= .70: c.append(("O25", "2,5 Üst", p["O25"], 3))
-    elif p["O25"] >= .60: c.append(("O25", "2,5 Üst", p["O25"], 2))
+    # 2,5 Üst en fazla Orta: %70+ seçimler 8 sezonda %70-74 tuttu (MS Güçlü ~%79)
+    if p["O25"] >= .60: c.append(("O25", "2,5 Üst", p["O25"], 2))
     if 1 - p["O25"] >= .60: c.append(("U25", "2,5 Alt", 1 - p["O25"], 2))
     if p["BTTS"] >= .60: c.append(("KGV", "KG Var", p["BTTS"], 2))
     if 1 - p["BTTS"] >= .60: c.append(("KGY", "KG Yok", 1 - p["BTTS"], 1))
@@ -230,6 +230,7 @@ def live_alert_message(alerts):
     for m, pk in alerts:
         st = m.get("stats") or [{}, {}]
         sot = f" · isabetli şut {st[0].get('shotsOnTarget')}-{st[1].get('shotsOnTarget')}" if st[0].get("shotsOnTarget") is not None else ""
+        if m.get("corners"): sot += f" · korner {m['corners'][0]}-{m['corners'][1]}"
         reds = (" 🟥" * m["reds"][0]) + " / " + (" 🟥" * m["reds"][1]) if any(m["reds"]) else ""
         out.append(f"\n<b>{e(m.get('clock') or '')} {e(nm(m['home']))} {m['score'][0]}-{m['score'][1]} {e(nm(m['away']))}</b>"
                    f" <i>({e(m['lgName'])})</i>{reds}{sot}\n"

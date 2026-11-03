@@ -179,6 +179,7 @@ def live_row(m, pk, nm):
         if any(m["reds"]): info.append(f"kırmızı kart {m['reds'][0]}-{m['reds'][1]}")
         st = m.get("stats") or [{}, {}]
         if st[0].get("shotsOnTarget") is not None: info.append(f"isabetli şut {st[0]['shotsOnTarget']}-{st[1]['shotsOnTarget']}")
+        if m.get("corners"): info.append(f"korner {m['corners'][0]}-{m['corners'][1]}")
         if st[0].get("possessionPct"): info.append(f"top %{round(float(st[0]['possessionPct']))}-%{round(float(st[1]['possessionPct']))}")
         d.text((190, y + 54), _fit(d, " · ".join(info), F(18), 560), font=F(18), fill=MUTED)
         if pk:

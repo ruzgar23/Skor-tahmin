@@ -4,7 +4,7 @@ Maç öncesi beklenti: takımların bu maçtan ÖNCEKİ maçlardaki korner ortal
 Parametreler 2023-25 maçlarıyla öğrenilir, 2025-26 ve sonrasında denenir (ileriye dönük).
 Seçim kuralı canlı goldeki gibi: %70–88 arası olasılık, maç başına en olası tek seçim.
 Kullanım: python -I backtest/live_corner_test.py <events.pkl>"""
-import sys, pickle, math, collections
+import sys, os, pickle, math, collections
 import numpy as np
 from scipy.optimize import minimize
 from scipy.stats import poisson
@@ -14,7 +14,7 @@ R = pickle.load(open(sys.argv[1], "rb"))
 R = [m for m in R if m["ch"] + m["ca"] > 0 and m["lg"] not in ("SC1", "SC2", "SC3")]
 R.sort(key=lambda m: m["date"])
 SPLIT = "2025-08-01"
-MINS = (30, 45, 60, 75)
+MINS = tuple(int(x) for x in os.environ.get("MINS", "30,45,60,75").split(","))
 
 # ---- maç öncesi beklenti (yalnızca geçmiş maçlar) ----
 team = collections.defaultdict(lambda: [0.0, 0.0, 0.0])  # üstel ağırlıklı: kazanılan, verilen, ağırlık
@@ -66,9 +66,10 @@ def arr(X):
 
 
 def mus(x, A, kind):
-    rem = np.clip((90 - A["t"]) / 90, 0, 1) * x[0]
     if kind == "lig":
+        rem = np.clip((90 - A["t"]) / 90, 0, 1) * x[0]
         return rem * A["Lh"], rem * A["La"]
+    rem = np.clip(90 - A["t"] + x[6], 0, None) / 90 * x[0]  # x[6]: ikinci yarı uzatma dakikası
     w = x[1] * A["t"] / 90
     ph, pa = A["ch"] / (A["t"] / 90), A["ca"] / (A["t"] / 90)
     bh = (1 - w) * A["Eh"] + w * ph; ba = (1 - w) * A["Ea"] + w * pa
@@ -86,24 +87,36 @@ def nll(x, A, kind):
 
 TR, TE = arr(train), arr(test)
 fits = {}
-for kind, x0 in (("lig", [1.0]), ("model", [1.0, 0.4, 0.1, -0.1, -0.2, 0.2])):
+for kind, x0 in (("lig", [1.0]), ("model", [1.0, 0.4, 0.1, -0.1, -0.2, 0.2, 4.0])):
     r = minimize(nll, x0, args=(TR, kind), method="Nelder-Mead", options={"maxiter": 4000, "xatol": 1e-4, "fatol": 1e-4})
     fits[kind] = r.x
 print(f"Doğrulanmış maç {len(R)} (öğrenme {len({id(s[0]) for s in train})}, test {len({id(s[0]) for s in test})}), "
       f"ligler {dict(collections.Counter(m['lg'] for m in R))}")
-x = fits["model"]
+x = fits["model"]; print("parametreler:", [round(float(v), 4) for v in x])
 print(f"Model: zaman payı {x[0]:.3f}, tempo ağırlığı (90'da) {x[1]:.2f}, geride {math.exp(x[2]):.2f}x, önde {math.exp(x[3]):.2f}x, "
-      f"kendi kırmızısı {math.exp(x[4]):.2f}x, rakip kırmızısı {math.exp(x[5]):.2f}x")
+      f"kendi kırmızısı {math.exp(x[4]):.2f}x, rakip kırmızısı {math.exp(x[5]):.2f}x, uzatma {x[6]:.1f} dk")
+# Toplam kalan korner için aşırı yayılım: negatif binom, r öğrenme verisinden
+from scipy.stats import nbinom
+from scipy.optimize import minimize_scalar
+_mh, _ma = mus(x, TR, "model"); _mt = _mh + _ma; _y = TR["yh"] + TR["ya"]
+NB_R = minimize_scalar(lambda lr: -np.sum(nbinom.logpmf(_y, np.exp(lr), np.exp(lr) / (np.exp(lr) + _mt))),
+                       bounds=(0, 8), method="bounded").x
+NB_R = float(np.exp(NB_R)); print(f"negatif binom r = {NB_R:.2f}")
 for kind in fits:
     print(f"  test log-kayıp/anlık ({kind}): {nll(fits[kind], TE, kind) / len(test):.4f}")
 
 
-def picks(mt, cur):
+def p_atleast(need, mt, kind):
+    if kind == "lig": return 1 - poisson.cdf(need - 1, mt)
+    return 1 - nbinom.cdf(need - 1, NB_R, NB_R / (NB_R + mt))
+
+
+def picks(mt, cur, kind):
     """Toplam korner çizgileri: mevcut+0,5 ... mevcut+6,5; %70–88 arası en olası seçim."""
     best = None
     for k in range(0, 7):
         line = cur + k + 0.5; need = k + 1   # üst: kalan korner ≥ need
-        po = 1 - poisson.cdf(need - 1, mt)
+        po = p_atleast(need, mt, kind)
         for lab, pr in ((f"{line:.1f} Üst", po), (f"{line:.1f} Alt", 1 - po)):
             if 0.70 <= pr <= 0.88 and (best is None or pr > best[1]):
                 best = (lab, pr, line)
@@ -116,14 +129,14 @@ for kind in ("lig", "model"):
     by = collections.defaultdict(lambda: [0, 0, 0.0]); cal = collections.defaultdict(lambda: [0, 0, 0.0])
     for i, s in enumerate(test):
         cur = s[2] + s[3]; mt = mh[i] + ma[i]
-        p = picks(mt, cur)
+        p = picks(mt, cur, kind)
         if not p: continue
         fin = s[0]["ch"] + s[0]["ca"]
         w = fin > p[2] if "Üst" in p[0] else fin < p[2]
         for key in (s[1], "TOPLAM", "Üst" if "Üst" in p[0] else "Alt"):
             c = by[key]; c[0] += 1; c[1] += w; c[2] += p[1]
         # genel kalibrasyon: mevcut+1,5 üst
-        po = 1 - poisson.cdf(1, mt); b = min(int(po * 10) / 10, .9)
+        po = p_atleast(2, mt, kind); b = min(int(po * 10) / 10, .9)
         c = cal[b]; c[0] += 1; c[1] += (fin - cur) >= 2; c[2] += po
     print(f" {kind}:")
     for key in list(MINS) + ["Üst", "Alt", "TOPLAM"]:

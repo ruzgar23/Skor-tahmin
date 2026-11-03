@@ -39,8 +39,7 @@ def grade(p):
     k = max(("1", "X", "2"), key=lambda k: p[k]); v = p[k]
     if v >= .70: c.append(("MS", k, v, 3))
     elif v >= .60: c.append(("MS", k, v, 2))
-    if p["O"] >= .70: c.append(("2,5 Üst", "O", p["O"], 3))
-    elif p["O"] >= .60: c.append(("2,5 Üst", "O", p["O"], 2))
+    if p["O"] >= .60: c.append(("2,5 Üst", "O", p["O"], 2))  # 2,5 Üst en fazla Orta
     if p["U"] >= .60: c.append(("2,5 Alt", "U", p["U"], 2))
     if p["B"] >= .60: c.append(("KG Var", "B", p["B"], 2))
     if 1 - p["B"] >= .60: c.append(("KG Yok", "NB", 1 - p["B"], 1))

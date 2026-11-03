@@ -93,3 +93,10 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
 - Etkisi: daha fazla maç Güçlü eşiğini geçer (haftada ~10,6 → ~13,2), Güçlü tutma oranı %79,8 → %78,3 olur ama gösterilen olasılık gerçeğe daha yakındır. Ortalama orana göre getiri değişmedi (her iki yöntemde ≈ −%1,3).
 - Pinnacle oranları piyasa ortalamasından çok az daha isabetli; fark seçimlere yansımadığı için kaynak değiştirilmedi. Maça yakın (kapanış) oranlar belirgin şekilde daha iyi; teyit adımı bu yüzden işe yarıyor.
 - Test: `python -I backtest/margin_test.py <football-data klasörü>` (klasör yapısı: `<sezon>/<lig>.csv`).
+
+## Canlı korner, kural düzeltmeleri ve canlı veri kaydı
+- **Canlı korner:** 55–80. dakika arasında korner alt/üst seçimi (maç başına bir kez, üst liglerde). Kalan korner; takımların maç öncesi korner beklentisi, maç içi tempo, skor durumu (geride olan %17 fazla, önde olan %21 az), kırmızı kartlar ve ~6,8 dakikalık uzatma ile hesaplanır.
+  ESPN anlatımlarından 7.092 maçlık testte (2023-25 öğrenme, 2025-26 test) seçimlerin %83,4'ü tuttu (beklenen %83,5). Süper Lig'de dakika verisi olmadığı için orada test edilmedi. Test: `backtest/live_events.py` + `backtest/live_corner_test.py`.
+- **2,5 Üst artık en fazla Orta:** %70 üstü 2,5 Üst seçimleri 8 sezonda %70–74 tutuyordu (MS Güçlü ~%79). Güçlü seçimler artık yalnızca MS: %78,7.
+- **Canlı KG Yok:** olasılığı 2 puan düşürülerek gösterilir (devre arası testinde ~2 puan iyimserdi). Düzeltme sonrası %77,9 tuttu, beklenen %77,7.
+- **Canlı veri kaydı:** her canlı kontrolde dakika, skor, korner, kart ve şut sayıları `state/run/live_log/` altına aylık dosyalara yazılır (yalnızca değişen anlar). Bu veri birikince Süper Lig ve kart pazarları da test edilebilecek.

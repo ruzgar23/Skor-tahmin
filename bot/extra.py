@@ -375,8 +375,16 @@ def teyit_summary(picks, history, day):
 
 
 # ---------- canlı seçim karnesi ----------
-def live_settle(k, s0, s, final):
-    """Canlı seçimin sonucu. s0: bildirim anındaki skor, s: şimdiki skor. final=False iken yalnızca kesinleşenler döner."""
+def live_settle(k, s0, s, final, corners=None):
+    """Canlı seçimin sonucu. s0: bildirim anındaki skor, s: şimdiki skor. final=False iken yalnızca kesinleşenler döner.
+    Korner seçimleri (CO/CU + çizgi) için corners: [ev, dep] güncel korner sayısı."""
+    if k[:2] in ("CO", "CU"):
+        if not corners:
+            return None
+        tc = corners[0] + corners[1]; line = float(k[2:])
+        if tc > line:
+            return k[1] == "O"
+        return (k[1] == "U") if final else None
     a, b = s; t = a + b; t0 = s0[0] + s0[1]
     if k == "GOAL" and t > t0: return True
     if k == "NOGOAL" and t > t0: return False
@@ -403,12 +411,14 @@ def live_won_message(items):
         out.append("🏆 <b>WON — canlı seçim tuttu!</b>")
         for b in won:
             out.append(f"✅ <b>{e(nm(b['home']))} {b['res'][0]}-{b['res'][1]} {e(nm(b['away']))}</b> <i>({e(b['lgName'])})</i>\n"
-                       f"   {e(b['label'])} · {b['minute']}'de %{round(b['prob'] * 100)} ile verilmişti")
+                       f"   {e(b['label'])} · {b['minute']}'de %{round(b['prob'] * 100)} ile verilmişti"
+                       + (f" · korner {b['cres'][0]}-{b['cres'][1]}" if b.get("cres") and b["k"].startswith("C") else ""))
     if lost:
         out.append(("\n" if won else "") + "❌ <b>LOST — canlı seçim tutmadı</b>")
         for b in lost:
             out.append(f"❌ <b>{e(nm(b['home']))} {b['res'][0]}-{b['res'][1]} {e(nm(b['away']))}</b> <i>({e(b['lgName'])})</i>\n"
-                       f"   {e(b['label'])} · {b['minute']}'de %{round(b['prob'] * 100)} ile verilmişti")
+                       f"   {e(b['label'])} · {b['minute']}'de %{round(b['prob'] * 100)} ile verilmişti"
+                       + (f" · korner {b['cres'][0]}-{b['cres'][1]}" if b.get("cres") and b["k"].startswith("C") else ""))
     return "\n".join(out)
 
 
@@ -435,7 +445,8 @@ def live_report_lines(bets, day):
     w = sum(1 for b in rows if b["ok"])
     out = [f"\n🔴 <b>Canlı seçimler:</b> {len(rows)} seçimin {w}'i tuttu ({pct(w / len(rows))})"]
     for b in rows:
-        out.append(f"{'✅' if b['ok'] else '❌'} {e(nm(b['home']))} {b['res'][0]}-{b['res'][1]} {e(nm(b['away']))} · {e(b['label'])} ({b['minute']}') {pct(b['prob'])}")
+        out.append(f"{'✅' if b['ok'] else '❌'} {e(nm(b['home']))} {b['res'][0]}-{b['res'][1]} {e(nm(b['away']))} · {e(b['label'])} ({b['minute']}') {pct(b['prob'])}"
+                   + (f" · korner {b['cres'][0]}-{b['cres'][1]}" if b.get("cres") and b["k"].startswith("C") else ""))
     return out
 
 

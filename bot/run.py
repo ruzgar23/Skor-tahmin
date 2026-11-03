@@ -322,13 +322,14 @@ def live_tick(st):
     """Bir canlı kontrol: canlı analiz, uyarılar, live.json yayını. Dönüş: canlı maç sayısı."""
     import live as L
     lj = os.path.join(SITE, "live.json")
-    L.main(os.path.join(SITE, "data.json"), lj, lj if os.path.exists(lj) else None)
+    L.main(os.path.join(SITE, "data.json"), lj, lj if os.path.exists(lj) else None,
+           logdir=os.path.join(STATE_DIR, "run", "live_log"))
     lv = jload("live.json", {"matches": [], "alerts": []})
     by_id = {m["id"]: m for m in lv["matches"]}
     alerts = []
     for a in lv.get("alerts", []):
         m = by_id.get(a["id"])
-        pk = next((p for p in (m or {}).get("picks", []) if p["k"] == a["k"]), None)
+        pk = next((p for p in (m or {}).get("picks", []) + (m or {}).get("cpicks", []) if p["k"] == a["k"]), None)
         if m and pk: alerts.append((m, pk))
     if alerts:
         broadcast_rich(st, imgs_or(visual.live_images, alerts[:8]), core.live_alert_message(alerts[:8]))
@@ -336,7 +337,7 @@ def live_tick(st):
         for m, pk in alerts[:8]:
             bets.setdefault(f"{m['id']}|{pk['k']}", dict(
                 eid=m.get("eid"), slug=m.get("slug"), k=pk["k"], label=pk["label"], prob=pk["prob"], minute=m["minute"],
-                home=m["home"], away=m["away"], lgName=m["lgName"], s0=m["score"], ts=now, ok=None))
+                home=m["home"], away=m["away"], lgName=m["lgName"], s0=m["score"], c0=m.get("corners"), ts=now, ok=None))
     settle_live(st, by_id)
     publish("Canlı güncelleme", ["live.json"])
     return len(lv["matches"])
@@ -411,6 +412,7 @@ def results_tick(st):
 def settle_live(st, live_by_id):
     """Bildirilen canlı seçimleri skor geldikçe sonuçlandırır; tutanlar için anında WON bildirimi."""
     import espn
+    import live as L
     bets = st.setdefault("live_bets", {}); now = datetime.now(timezone.utc)
     for k in [k for k, b in bets.items() if datetime.fromisoformat(b["ts"]) < now - timedelta(days=4)]:
         del bets[k]
@@ -419,9 +421,9 @@ def settle_live(st, live_by_id):
     for key, b in bets.items():
         if b.get("ok") is not None:
             continue
-        m = by_eid.get(b["eid"]); final = False; score = None
+        m = by_eid.get(b["eid"]); final = False; score = None; corners = None
         if m:
-            score = m["score"]
+            score = m["score"]; corners = m.get("corners")
         elif b.get("eid") and b.get("slug"):
             t0 = datetime.fromisoformat(b["ts"])
             for d in sorted({t0.date(), (t0 + timedelta(hours=3)).date()}):
@@ -438,16 +440,20 @@ def settle_live(st, live_by_id):
                     except (KeyError, ValueError, TypeError):
                         score = None
                     final = ev["status"]["type"]["state"] == "post"
+                    corners = L.corners_of(c)
             if score is None and now - datetime.fromisoformat(b["ts"]) > timedelta(hours=6):
                 b["ok"] = "?"  # sonuç bulunamadı; karneye girmez
                 continue
         if score is None:
             continue
         b["cur"] = score
-        r = extra.live_settle(b["k"], b["s0"], score, final)
+        r = extra.live_settle(b["k"], b["s0"], score, final, corners)
         if r is None:
+            if final and b["k"].startswith("C") and corners is None:
+                b["ok"] = "?"  # korner sayısı alınamadı; karneye girmez
             continue
         b["ok"] = r; b["res"] = score; b["done_at"] = now.isoformat()
+        if corners: b["cres"] = corners
         won.append(b)  # tutan da tutmayan da bildirilir
     for b in bets.values():  # erken kazanılanlarda karne için son skoru tamamla
         if b.get("ok") is True and b.get("eid") in by_eid:
@@ -470,13 +476,14 @@ def live():
                     scan(); last_scan = time.time(); data = jload("data.json", {"matches": []}); rescanned = True
                     check_moves(st)
             lj = os.path.join(SITE, "live.json")
-            L.main(os.path.join(SITE, "data.json"), lj, lj if os.path.exists(lj) else None)
+            L.main(os.path.join(SITE, "data.json"), lj, lj if os.path.exists(lj) else None,
+           logdir=os.path.join(STATE_DIR, "run", "live_log"))
             lv = jload("live.json", {"matches": [], "alerts": []})
             by_id = {m["id"]: m for m in lv["matches"]}
             alerts = []
             for a in lv.get("alerts", []):
                 m = by_id.get(a["id"])
-                pk = next((p for p in (m or {}).get("picks", []) if p["k"] == a["k"]), None)
+                pk = next((p for p in (m or {}).get("picks", []) + (m or {}).get("cpicks", []) if p["k"] == a["k"]), None)
                 if m and pk: alerts.append((m, pk))
             if alerts:
                 broadcast_rich(st, imgs_or(visual.live_images, alerts[:8]), core.live_alert_message(alerts[:8]))
