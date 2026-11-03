@@ -16,7 +16,7 @@ def _row(m, pick, prob, min_odds, tier, league=None):
                 pick=pick.upper(), prob=prob, min_odds=min_odds, tier=tier)
 
 
-def daily_sections(data, basket, day, max_mid=8, max_cards=4):
+def daily_sections(data, basket, day, max_mid=8, max_cards=4, max_extra=6):
     ms = core.day_matches(data, day)
     graded = [(m, core.grade(m)) for m in ms]
     strong = sorted([x for x in graded if x[1] and x[1]["tier"] == 3], key=lambda x: (x[0]["ko"], -x[1]["prob"]))
@@ -30,6 +30,9 @@ def daily_sections(data, basket, day, max_mid=8, max_cards=4):
         if pk:
             kr.append((m, pk))
     kr.sort(key=lambda x: -x[1]["gap"])
+    ex = sorted([(m, core.extra_pick(m)) for m in ms], key=lambda x: -(x[1]["prob"] if x[1] else 0))
+    ex = sorted([x for x in ex if x[1]][:max_extra], key=lambda x: x[0]["ko"])
+    secs.append(("Ek seçimler (ilk yarı, takım golü)", [_row(m, g["label"], g["prob"], g["minOdds"], 4) for m, g in ex]))
     secs.append(("Kart seçimleri", [_row(m, pk["label"], pk["prob"], pk["minOdds"], 2) for m, pk in kr[:max_cards]]))
     bk = []
     for g in extra.basket_upcoming(basket):
@@ -91,7 +94,7 @@ def daily_text(data, basket, day):
             continue
         out.append(f"\n<b>{head}</b>")
         for r in rows:
-            star = "★★★" if r["tier"] == 3 else "★★☆"
+            star = {3: "★★★", 2: "★★☆"}.get(r["tier"], "🔵")
             out.append(f"{r['time']} {core.e(r['home'])} – {core.e(r['away'])}\n"
                        f"   👉 <b>{core.e(r['pick'])}</b> · %{round(r['prob']*100)} · oran ≥ <b>{core.odds_fmt(r['min_odds'])}</b> {star} · {core.UNIT[r['tier']]}")
     if len(out) == 1:
@@ -200,7 +203,8 @@ def report_images(history, day, picks=None, live_bets=None, opicks=None, basket=
         rows.append(PG.result_row(h, g, ok, nm))
     lv = extra.live_day(live_bets, day)
     orow = extra.other_day_results(opicks, basket, day)
-    if not rows and not lv and not orow:
+    xr = core.extra_results(history, day)
+    if not rows and not lv and not orow and not xr:
         return []
     k = []
     for tier, name in ((3, "güçlü"), (2, "orta")):
@@ -213,6 +217,9 @@ def report_images(history, day, picks=None, live_bets=None, opicks=None, basket=
     if orow:
         ow = sum(1 for _, _, ok in orow if ok)
         k.append((f"{ow}/{len(orow)}", f"basketbol/hokey/tenis (%{round(100 * ow / len(orow))})", PG.GREEN if ow / len(orow) >= .7 else PG.AMBER))
+    if xr:
+        xw = sum(1 for _, _, ok in xr if ok)
+        k.append((f"{xw}/{len(xr)}", f"ek seçim tuttu (%{round(100 * xw / len(xr))})", PG.GREEN if xw / len(xr) >= .7 else PG.AMBER))
     if lv:
         lw = sum(1 for b in lv if b["ok"])
         k.append((f"{lw}/{len(lv)}", f"canlı seçim tuttu (%{round(100 * lw / len(lv))})", PG.GREEN if lw / len(lv) >= .7 else PG.AMBER))
@@ -223,6 +230,11 @@ def report_images(history, day, picks=None, live_bets=None, opicks=None, basket=
         blocks.append(PG.note_row(f"Maç önü teyitli seçimler: {w1}/{n1} tuttu" + (f" · iptal edilenler: {w0}/{n0} tuttu" if n0 else ""), PG.INK, 56))
     if rows:
         blocks += [("head", "Maç öncesi seçimler")] + rows
+    if xr:
+        blocks.append(("head", "Ek seçimler (ilk yarı, takım golü)"))
+        for h, g, ok in xr:
+            hh = dict(h, lgName=h["lgName"] + (f" · İY {h['ht'][0]}-{h['ht'][1]}" if g["label"].startswith("İY") and h.get("ht") else ""))
+            blocks.append(PG.result_row(hh, g, ok, nm))
     if lv:
         blocks.append(("head", "Canlı seçimler"))
         for b in lv:

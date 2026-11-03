@@ -25,8 +25,8 @@ TR = {"Besiktas": "Beşiktaş", "Fenerbahce": "Fenerbahçe", "Goztep": "Göztepe
 TIER_LG = {"UCL": 0, "UEL": 0, "UECL": 0, "E0": 1, "SP1": 1, "I1": 1, "D1": 1, "F1": 1, "T1": 1, "N1": 1, "P1": 1,
            "SC0": 1, "G1": 1, "E1": 2, "SP2": 2, "I2": 2, "D2": 2, "F2": 2, "SC1": 2, "E2": 3, "E3": 3, "SC2": 3, "SC3": 3}
 TIERNAME = {3: "Güçlü", 2: "Orta", 1: "Düşük güven"}
-HIT = {("MS", 3): .80, ("MS", 2): .67, ("O25", 3): .74, ("O25", 2): .65, ("U25", 2): .63, ("KGV", 2): .64}
-UNIT = {3: "1 birim", 2: "½ birim"}
+HIT = {("MS", 3): .80, ("MS", 2): .67, ("O25", 2): .65, ("U25", 2): .63, ("KGV", 2): .64}
+UNIT = {3: "1 birim", 2: "½ birim", 4: "½ birim"}
 LABEL2KEY = {"MS 1": "1", "MS X": "X", "MS 2": "2", "2,5 Üst": "O25", "2,5 Alt": "U25", "KG Var": "BTTS", "KG Yok": "NBTTS"}
 
 
@@ -60,8 +60,8 @@ def grade(m):
     p = m["p"]; msk, msp = pick_of(m); c = []
     if msp >= .70: c.append(("MS", msk, msp, 3))
     elif msp >= .60: c.append(("MS", msk, msp, 2))
-    if p["O25"] >= .70: c.append(("O25", "2,5 Üst", p["O25"], 3))
-    elif p["O25"] >= .60: c.append(("O25", "2,5 Üst", p["O25"], 2))
+    # 2,5 Üst en fazla Orta: %70+ seçimler 8 sezonda %70-74 tuttu (MS Güçlü ~%79)
+    if p["O25"] >= .60: c.append(("O25", "2,5 Üst", p["O25"], 2))
     if 1 - p["O25"] >= .60: c.append(("U25", "2,5 Alt", 1 - p["O25"], 2))
     if p["BTTS"] >= .60: c.append(("KGV", "KG Var", p["BTTS"], 2))
     if 1 - p["BTTS"] >= .60: c.append(("KGY", "KG Yok", 1 - p["BTTS"], 1))
@@ -75,6 +75,57 @@ def grade(m):
     if (not m["known"][0] or not m["known"][1]) and not (m.get("cup") and m.get("src") == "piyasa"):
         g["tier"] = 1
     return g
+
+
+# Ek seçimler (ilk yarı ve takım gol alt/üst): maç başına en fazla bir tane, olasılık %70–80.
+# backtest/new_markets_test.py: 24.863 seçimde %76,9 tuttu (beklenen %76,0), 7 sezonun hepsinde %76–78.
+EXTRA = (("HTO05", "İY 0,5 Üst", False), ("HTO15", "İY 1,5 Alt", True),
+         ("HO05", "Ev gol 0,5 Üst", False), ("HO15", "Ev gol 1,5 Üst", False), ("HO15", "Ev gol 1,5 Alt", True),
+         ("HO25", "Ev gol 2,5 Alt", True), ("AO05", "Dep gol 0,5 Üst", False), ("AO15", "Dep gol 1,5 Üst", False),
+         ("AO15", "Dep gol 1,5 Alt", True), ("AO25", "Dep gol 2,5 Alt", True))
+EXTRA_KEY = {lab: (k, under) for k, lab, under in EXTRA}
+
+
+def extra_pick(m):
+    """Maçın ek seçimi (yalnızca piyasa oranlı maçlarda) ya da None."""
+    p = m.get("p") or {}
+    if m.get("src") != "piyasa" or not all(m.get("known") or [False]):
+        return None
+    best = None
+    for k, lab, under in EXTRA:
+        if k not in p:
+            continue
+        v = 1 - p[k] if under else p[k]
+        if .70 <= v < .80 and (best is None or v > best["prob"]):
+            best = dict(fam="EXTRA", label=lab, prob=v, tier=2, minOdds=1.03 / v)
+    return best
+
+
+def settle_extra(label, res, ht=None):
+    """Ek seçimin sonucu; ilk yarı seçimleri için devre skoru gerekir."""
+    if not res or label not in EXTRA_KEY:
+        return None
+    k, under = EXTRA_KEY[label]; line = int(k[-2]) + 0.5
+    if k.startswith("HT"):
+        if not ht:
+            return None
+        v = ht[0] + ht[1]
+    else:
+        v = res[0] if k[0] == "H" else res[1]
+    return v < line if under else v > line
+
+
+def extra_results(history, day):
+    """Dünün ek seçim sonuçları: [(maç, seçim, tuttu mu)]."""
+    out = []
+    for h in sorted(history, key=lambda h: h["ko"]):
+        if not h.get("res") or ko_local(h).date() != day:
+            continue
+        g = extra_pick(h)
+        ok = settle_extra(g["label"], h["res"], h.get("ht")) if g else None
+        if ok is not None:
+            out.append((h, g, ok))
+    return out
 
 
 def settle(k, res):
@@ -124,6 +175,12 @@ def daily_message(data, day):
         out += [pick_line(m, g) for m, g in mid[:25]]
         if len(mid) > 25:
             out.append(f"   … ve {len(mid) - 25} maç daha (/orta)")
+        out.append("")
+    ex = sorted([(m, extra_pick(m)) for m in ms], key=lambda x: -(x[1]["prob"] if x[1] else 0))
+    ex = [x for x in ex if x[1]][:6]
+    if ex:
+        out.append("🔵 <b>Ek seçimler</b> — ilk yarı ve takım golü (testte %77 tuttu)")
+        out += [pick_line(m, dict(g, tier=4)) for m, g in sorted(ex, key=lambda x: ko_local(x[0]))]
         out.append("")
     if not strong and not mid:
         out.append("Bugün %60'ı geçen net bir seçim yok.\n")
@@ -210,18 +267,25 @@ def report_message(history, day, picks=None, live_bets=None, opicks=None, basket
         t[g["tier"]][0] += 1; t[g["tier"]][1] += ok
         rows.append(f"{'✅' if ok else '❌'} {e(nm(h['home']))} {h['res'][0]}-{h['res'][1]} {e(nm(h['away']))} · "
                     f"{e(g['label'])} {pct(g['prob'])}")
-    if not rows and not lv:
+    xr = extra_results(history, day)
+    if not rows and not lv and not xr:
         return None
     head = [f"📊 <b>Karne — {day.strftime('%d.%m.%Y')}</b>"]
     for tier in (3, 2):
         n, k = t[tier]
         if n:
             head.append(f"{TIERNAME[tier]}: {n} seçimin {k}'i tuttu ({pct(k / n)})")
+    if xr:
+        xw = sum(1 for _, _, ok in xr if ok)
+        head.append(f"Ek seçimler (ilk yarı, takım golü): {len(xr)} seçimin {xw}'i tuttu ({pct(xw / len(xr))})")
     ts = extra.teyit_summary(picks, history, day)
     if ts:
         (n1, w1), (n0, w0) = ts["ok"], ts["bad"]
         head.append(f"Maç önü teyit: {n1} teyitli seçimin {w1}'i tuttu" + (f"; iptal edilen {n0} seçimin {w0}'i tuttu" if n0 else ""))
-    parts = ["\n".join(head)] + (["\n".join(rows)] if rows else []) + (["\n".join(lv).strip()] if lv else [])
+    xrows = [f"{'✅' if ok else '❌'} {e(nm(h['home']))} {h['res'][0]}-{h['res'][1]} {e(nm(h['away']))} · {e(g['label'])} {pct(g['prob'])}"
+             + (f" (İY {h['ht'][0]}-{h['ht'][1]})" if g["label"].startswith("İY") and h.get("ht") else "") for h, g, ok in xr]
+    parts = (["\n".join(head)] + (["\n".join(rows)] if rows else []) + (["🔵 <b>Ek seçimler</b>\n" + "\n".join(xrows)] if xrows else [])
+             + (["\n".join(lv).strip()] if lv else []))
     return "\n\n".join(parts) + "\n\n<i>Tek günlük sonuç şansa çok bağlıdır.</i>"
 
 
@@ -230,6 +294,7 @@ def live_alert_message(alerts):
     for m, pk in alerts:
         st = m.get("stats") or [{}, {}]
         sot = f" · isabetli şut {st[0].get('shotsOnTarget')}-{st[1].get('shotsOnTarget')}" if st[0].get("shotsOnTarget") is not None else ""
+        if m.get("corners"): sot += f" · korner {m['corners'][0]}-{m['corners'][1]}"
         reds = (" 🟥" * m["reds"][0]) + " / " + (" 🟥" * m["reds"][1]) if any(m["reds"]) else ""
         out.append(f"\n<b>{e(m.get('clock') or '')} {e(nm(m['home']))} {m['score'][0]}-{m['score'][1]} {e(nm(m['away']))}</b>"
                    f" <i>({e(m['lgName'])})</i>{reds}{sot}\n"

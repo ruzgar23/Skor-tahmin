@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 from scipy.stats import poisson
 from scipy.optimize import minimize
+import engine as E
 
 API = "https://site.api.espn.com/apis/site/v2/sports/"
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -108,7 +109,7 @@ def nhl(days):
             h, a = side("home"), side("away")
             if not (h and a):
                 continue
-            ph = (1 / h) / (1 / h + 1 / a)
+            ph = E.fair({"h": h, "a": a}, ("h", "a"))["h"]
             p = nhl_probs(ph, od.get("overUnder"))
             g.update(p=p, pick=nhl_grade(p), odds=dict(h=h, a=a, total=od.get("overUnder")),
                      info=f"Normal süre: 1 %{round(p['1']*100)} · X %{round(p['X']*100)} · 2 %{round(p['2']*100)} · 5,5 Üst %{round(p['O55']*100)}")

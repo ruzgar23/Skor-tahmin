@@ -278,7 +278,7 @@ function grade(m){
   const p=m.p, [msk,msp]=pickOf(m), c=[];
   const add=(fam,label,prob,tier)=>c.push({fam,label,prob,tier});
   if (msp>=.70) add('MS',msk,msp,3); else if (msp>=.60) add('MS',msk,msp,2);
-  if (p.O25>=.70) add('O25','2,5 Üst',p.O25,3); else if (p.O25>=.60) add('O25','2,5 Üst',p.O25,2);
+  if (p.O25>=.60) add('O25','2,5 Üst',p.O25,2);
   if (1-p.O25>=.60) add('U25','2,5 Alt',1-p.O25,2);
   if (p.BTTS>=.60) add('KGV','KG Var',p.BTTS,2);
   if (1-p.BTTS>=.60) add('KGY','KG Yok',1-p.BTTS,1);
