@@ -10,6 +10,8 @@ from scipy.optimize import minimize
 from scipy.stats import poisson
 
 R = pickle.load(open(sys.argv[1], "rb"))
+# İskoçya alt ligleri ve 0-0 korner maçlarında ESPN istatistiği boş (veri yok, gerçekten 0 değil)
+R = [m for m in R if m["ch"] + m["ca"] > 0 and m["lg"] not in ("SC1", "SC2", "SC3")]
 R.sort(key=lambda m: m["date"])
 SPLIT = "2025-08-01"
 MINS = (30, 45, 60, 75)
