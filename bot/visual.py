@@ -49,28 +49,46 @@ def daily_sections(data, basket, day, max_mid=8, max_cards=4, max_extra=6):
     return secs, len(ms)
 
 
+SPORT_OF = {"Basketbol (NBA)": "basketbol", "Hokey (NHL, normal süre)": "hokey", "Tenis (ATP/WTA)": "tenis"}
+SPORT_FOOT = {
+    "futbol": ("İddaa oranı kartta yazan sınırın altındaysa o maçı geç. Tekli oyna; 1 birim = kasanın %2'si. Maçtan ~1 saat önce gelen teyit mesajında İPTAL yazanı oynama.",
+               "Olasılıklar garanti değildir; %70'lik seçim de 10 maçın 3'ünde yatar."),
+    "basketbol": ("NBA maç sonucu uzatmalar dahildir. Olasılıklar DraftKings oranlarından.",
+                  "Olasılıklar garanti değildir."),
+    "hokey": ("iddaa'da hokey maç sonucu NORMAL SÜREDİR (uzatma ve penaltı sayılmaz).",
+              "Olasılıklar garanti değildir."),
+    "tenis": ("Tenis olasılıkları Elo modelinden; geçmiş oran verisi olmadığından kârlılık test edilemedi, oran sınırına mutlaka uy.",
+              "Olasılıklar garanti değildir."),
+}
+
+
 def daily_images(data, basket, day, per_page=8):
-    """Günün seçimlerini en fazla per_page satırlık resimlere böler."""
+    """Günün seçimleri: her spor ayrı görsel(ler)de, kendi başlık rengiyle; uzun listeler sayfalara bölünür."""
     secs, n = daily_sections(data, basket, day)
-    total = sum(len(r) for _, r in secs)
-    if not total:
-        return []
-    pages, cur, cnt = [], [], 0
+    by_sport = {}
     for head, rows in secs:
-        i = 0
-        while i < len(rows):
-            take = rows[i:i + (per_page - cnt)]
-            cur.append((head if i == 0 else head + " (devam)", take)); cnt += len(take); i += len(take)
-            if cnt >= per_page:
-                pages.append(cur); cur, cnt = [], 0
-    if cur:
-        pages.append(cur)
+        if rows:
+            by_sport.setdefault(SPORT_OF.get(head, "futbol"), []).append((head, rows))
     out = []
-    for k, pg in enumerate(pages, 1):
-        sub = f"{tr_date(day)} · {total} seçim" + (f" · sayfa {k}/{len(pages)}" if len(pages) > 1 else "")
-        out.append(cards.daily_card("GÜNÜN SEÇİMLERİ", sub, pg,
-                   ("İddaa oranı kartta yazan sınırın altındaysa o maçı geç. Tekli oyna; 1 birim = kasanın %2'si. Maçtan ~1 saat önce gelen teyit mesajında İPTAL yazanı oynama.",
-                    "Olasılıklar garanti değildir; %70'lik seçim de 10 maçın 3'ünde yatar.")))
+    for sport in ("futbol", "basketbol", "hokey", "tenis"):
+        ss = by_sport.get(sport)
+        if not ss:
+            continue
+        total = sum(len(r) for _, r in ss)
+        pages, cur, cnt = [], [], 0
+        for head, rows in ss:
+            i = 0
+            while i < len(rows):
+                take = rows[i:i + (per_page - cnt)]
+                cur.append((head if i == 0 else head + " (devam)", take)); cnt += len(take); i += len(take)
+                if cnt >= per_page:
+                    pages.append(cur); cur, cnt = [], 0
+        if cur:
+            pages.append(cur)
+        accent, name = cards.SPORT[sport]
+        for k, pg in enumerate(pages, 1):
+            sub = f"{tr_date(day)} · {total} seçim" + (f" · sayfa {k}/{len(pages)}" if len(pages) > 1 else "")
+            out.append(cards.daily_card(f"{name} · GÜNÜN SEÇİMLERİ", sub, pg, SPORT_FOOT[sport], accent))
     return out
 
 
@@ -92,7 +110,7 @@ def daily_text(data, basket, day):
     for head, rows in secs:
         if not rows:
             continue
-        out.append(f"\n<b>{head}</b>")
+        out.append(f"\n{ {'basketbol': '🏀', 'hokey': '🏒', 'tenis': '🎾'}.get(SPORT_OF.get(head), '⚽') } <b>{head}</b>")
         for r in rows:
             star = {3: "★★★", 2: "★★☆"}.get(r["tier"], "🔵")
             out.append(f"{r['time']} {core.e(r['home'])} – {core.e(r['away'])}\n"
@@ -133,7 +151,7 @@ import pages as PG
 SHORT_LG = {"Premier League": "Premier L.", "İskoçya Premiership": "İskoçya 1", "İskoçya Championship": "İskoçya 2",
             "İskoçya League One": "İskoçya 3", "İskoçya League Two": "İskoçya 4", "Yunanistan Süper Lig": "Yunanistan",
             "Şampiyonlar Ligi": "Şamp. Ligi", "Konferans Ligi": "Konf. Ligi", "2. Bundesliga": "Bundesliga 2"}
-FOOT = ("★★★ güçlü (testte %74–80 tuttu) · ★★☆ orta (%63–67). Oran, yazan sınırın altındaysa oynama.",
+FOOT = ("Yeşil kutu güçlü seçim, turuncu kutu orta seçim. Oran, yazan sınırın altındaysa oynama.",
         "Olasılıklar garanti değildir. Kaybetmeyi göze alamayacağın parayla oynama.")
 
 
@@ -143,7 +161,8 @@ def _short(s):
 
 
 def all_matches_images(data, basket, day):
-    """Bugünün tüm maçları (futbol + basketbol), lig lig."""
+    """Bugünün tüm maçları: futbol (lig lig), basketbol, hokey ve tenis ayrı görsellerde, her biri kendi renginde."""
+    out = []
     ms = sorted(core.day_matches(data, day), key=lambda m: (core.TIER_LG.get(m["lg"], 9), m["lgName"], m["ko"]))
     blocks, cur = [], None
     for m in ms:
@@ -151,22 +170,22 @@ def all_matches_images(data, basket, day):
             cur = m["lgName"]; blocks.append(("head", cur))
         mm = dict(m, time=ko_local(m).strftime("%H:%M"), league_short=SHORT_LG.get(m["lgName"], m["lgName"]))
         blocks.append(PG.football_row(mm, core.grade(m), nm))
+    if blocks:
+        out += PG.paginate("FUTBOL · BUGÜNÜN MAÇLARI", f"{tr_date(day)} · {len(ms)} maç", blocks, FOOT, cards.SPORT["futbol"][0])
     bk = sorted(extra.basket_upcoming(basket, hours=30), key=lambda g: g["ko"])
     if bk:
-        blocks.append(("head", "Basketbol · " + ", ".join(sorted({g["lg"] for g in bk}))))
+        blocks = []
         for g in bk:
             gg = dict(g, time=ko_local(g).strftime("%H:%M"), home=_short(g["home"]), away=_short(g["away"]))
             blocks.append(PG.basket_row(gg, extra.basket_grade(g)))
-    oth = 0
-    for sport, head, picks_only in (("hokey", "Hokey · NHL (normal süre)", False), ("tenis", "Tenis · öneri olan maçlar", True)):
+        out += PG.paginate("BASKETBOL · " + ", ".join(sorted({g["lg"] for g in bk})), f"{tr_date(day)} · {len(bk)} maç · uzatmalar dahil",
+                           blocks, FOOT, cards.SPORT["basketbol"][0])
+    for sport, title, sub, picks_only in (("hokey", "HOKEY · NHL", "maç sonucu normal süredir (uzatmasız)", False),
+                                          ("tenis", "TENİS · ATP / WTA", "yalnızca öneri olan maçlar", True)):
         gs = extra.other_upcoming(basket, hours=24, sport=sport, picks_only=picks_only)
         if gs:
-            blocks.append(("head", head)); oth += len(gs)
-            blocks += [_other_block(g) for g in gs]
-    if not blocks:
-        return []
-    n = len(ms) + len(bk) + oth
-    return PG.paginate("BUGÜNÜN MAÇLARI", f"{tr_date(day)} · {n} maç (futbol, basketbol, hokey, tenis)", blocks, FOOT)
+            out += PG.paginate(title, f"{tr_date(day)} · {len(gs)} maç · {sub}", [_other_block(g) for g in gs], FOOT, cards.SPORT[sport][0])
+    return out
 
 
 def _other_block(g):
@@ -186,7 +205,7 @@ def other_images(basket, sport):
                         "tenis": ("TENİS · ATP / WTA", "Elo modeli; yalnızca öneri olan maçlar",
                                   "Backtest (2024-26, 33 bin maç): %80 üstü favoriler %86, %70-80 arası %74 kazandı. Tenis için geçmiş oran yok; kârlılık test edilemedi, oran sınırına uy.")}[sport]
     blocks = [_other_block(g) for g in gs]
-    return PG.paginate(title, sub, blocks, (foot,))
+    return PG.paginate(title, sub, blocks, (foot,), cards.SPORT[sport][0])
 
 
 def report_images(history, day, picks=None, live_bets=None, opicks=None, basket=None):
