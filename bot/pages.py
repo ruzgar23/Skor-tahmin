@@ -85,9 +85,13 @@ def football_row(m, g, nm):
             col, soft, _, _ = TIER[g["tier"]]
             txt = g["label"].upper()
             right = _badge(d, xr - int(d.textlength(txt, font=F(28, True))) - 24, y + 18, txt, col, soft, 28)
-            sub = f"en az {_odds(g['minOdds'])}"
+            sub = f"%{round(g['prob'] * 100)} · en az {_odds(g['minOdds'])}"
             d.text((xr - d.textlength(sub, font=F(26)), y + 82), sub, font=F(26), fill=MUTED)
             right = max(right, int(d.textlength(sub, font=F(26)))) + 24
+        else:
+            sub = "net seçim yok"
+            d.text((xr - d.textlength(sub, font=F(24)), y + 24), sub, font=F(24), fill=GREY)
+            right = int(d.textlength(sub, font=F(24))) + 24
         d.text((x0, y + 20), _fit(d, f"{m['time']}  {nm(m['home'])} – {nm(m['away'])}", F(32, True), xr - right - x0),
                font=F(32, True), fill=INK)
         fav = max(("1", "X", "2"), key=lambda k: p[k]); x = x0
