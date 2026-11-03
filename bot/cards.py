@@ -45,8 +45,13 @@ def _bar(d, x, y, w, h, p, color):
         _rr(d, (x, y, x + max(h, int(w * p)), y + h), h // 2, color)
 
 
-def _header(d, title, sub):
-    d.rectangle((0, 0, W, 150), fill=HEAD)
+# Spor başına başlık rengi: her spor ayrı görselde, rengiyle ayırt edilir
+SPORT = {"futbol": ((21, 33, 43), "FUTBOL"), "basketbol": ((190, 84, 20), "BASKETBOL"),
+         "hokey": ((24, 96, 150), "HOKEY"), "tenis": ((104, 58, 150), "TENİS")}
+
+
+def _header(d, title, sub, fill=HEAD):
+    d.rectangle((0, 0, W, 150), fill=fill)
     d.text((48, 34), title, font=F(46, True), fill=(255, 255, 255))
     d.text((48, 98), sub, font=F(24), fill=(190, 200, 207))
 
@@ -70,7 +75,7 @@ def _footer(d, y, text):
     return y
 
 
-def daily_card(title, sub, sections, footer):
+def daily_card(title, sub, sections, footer, accent=HEAD):
     """sections: [(başlık, [satır])]; satır: dict(time, league, home, away, pick, prob, min_odds, tier, note)"""
     # Telefonda görsel ~1/3 boyuta küçülür: en küçük yazı 26 px. Kart başına üç satır:
     # (1) saat · lig ve güven, (2) maç, (3) büyük seçim + olasılık, sağda en düşük oran.
@@ -79,7 +84,7 @@ def daily_card(title, sub, sections, footer):
     CH = 236
     H = 150 + 30 + n_sec * 78 + rows * (CH + 18) + 320
     img = Image.new("RGB", (W, H), BG); d = ImageDraw.Draw(img)
-    _header(d, title, sub)
+    _header(d, title, sub, accent)
     y = 180
     for head, items in sections:
         if not items:
