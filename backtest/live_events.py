@@ -54,6 +54,13 @@ def minute(c):
 
 
 def summary(m):
+    try:
+        return _summary(m)
+    except Exception:
+        return None
+
+
+def _summary(m):
     j = g(f"{B}{espn.SLUG[m['lg']]}/summary?event={m['id']}")
     if not j: return None
     box = {}
@@ -86,6 +93,7 @@ def summary(m):
     for mn, k, tx in ev:
         if k != "R": continue
         s = "h" if m["home"] in tx else ("a" if m["away"] in tx else None)
+        if s is None: return None  # hangi takımın kırmızısı olduğu anlaşılmıyorsa maçı ele
         reds.append((mn, s))
     # gol dakikaları ve hangi takım: keyEvents daha güvenilir
     goals = []
