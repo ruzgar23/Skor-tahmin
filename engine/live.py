@@ -13,7 +13,10 @@ STATE = {-2: 1.10, -1: 1.15, 0: 1.00, 1: 0.95, 2: 0.95}  # 13.598 maçlık devre
 RED_OWN, RED_OPP = 0.67, 1.25
 HT_SHARE = 0.46
 RHO = -0.06
-KGY_FIX = 0.02  # devre arası testinde (29.368 maç) KG Yok olasılığı ~2 puan iyimserdi
+# Kalibrasyon düzeltmeleri (gerçek gol eğrisiyle; 2023-25 ve 2025-26'da aynı yönde): çifte şans 12 ~2 puan iyimser.
+# KG Yok için eski -2 puan düzeltmesi düz dağılım içindi; gerçek eğriyle gerek kalmadı.
+KGY_FIX = 0.0
+D12_FIX = 0.02
 
 # Canlı korner (backtest/live_corner_test.py, ESPN anlatımlarından 7.092 maç, 2023-25 öğrenme / 2025-26 test).
 # Kalan korner (her takım) = kalan_süre * [(1-w)*maç öncesi beklenti + w*maç içi tempo] * skor durumu * kırmızı kart;
@@ -37,10 +40,20 @@ def minute_of(status):
     return base + extra * 0.0, period  # uzatma dakikaları devre sonuna sayılır
 
 
+# Gollerin dakikaya göre birikimli payı (0..90; 45 ve 90 uzatma golleri dahil). ESPN, 2023-25, 13.401 maç, 36.548 gol.
+# Goller devre sonlarına doğru artar ve %4'ü ilk yarı, %8'i maç sonu uzatmasında atılır; eski düz dağılım kalan golü
+# düşük tahmin ediyordu (backtest/live_goal_test.py). None ise eski düz dağılım kullanılır.
+GOAL_CURVE = [0.0, 0.0046, 0.0114, 0.0192, 0.0279, 0.0366, 0.0454, 0.0544, 0.0647, 0.0741, 0.0831, 0.0927, 0.1028, 0.112, 0.1212, 0.1305, 0.1398, 0.1492, 0.1582, 0.1669, 0.1767, 0.1853, 0.1946, 0.2052, 0.2146, 0.2243, 0.2338, 0.2428, 0.2523, 0.2614, 0.2718, 0.2821, 0.2918, 0.3015, 0.3109, 0.3205, 0.3295, 0.3393, 0.3495, 0.3581, 0.3672, 0.3759, 0.3858, 0.3954, 0.405, 0.4452, 0.4511, 0.4611, 0.4706, 0.4818, 0.4928, 0.5037, 0.5153, 0.527, 0.538, 0.5494, 0.5611, 0.5727, 0.5837, 0.5957, 0.6073, 0.6195, 0.6303, 0.6412, 0.6532, 0.6644, 0.6749, 0.6851, 0.6956, 0.7056, 0.7168, 0.7276, 0.7386, 0.7487, 0.7585, 0.7687, 0.7791, 0.7901, 0.8002, 0.8107, 0.8213, 0.8317, 0.8426, 0.8526, 0.8627, 0.8737, 0.8839, 0.895, 0.9056, 0.9167, 1.0]
+
+
 def done_share(minute, period, h=HT_SHARE):
-    if period <= 1:
-        return h * min(minute, 45) / 45
-    return h + (1 - h) * min(max(minute - 45, 0), 45) / 45
+    if GOAL_CURVE is None:
+        if period <= 1:
+            return h * min(minute, 45) / 45
+        return h + (1 - h) * min(max(minute - 45, 0), 45) / 45
+    t = int(minute)
+    t = min(max(t, 0), 45) if period <= 1 else min(max(t, 45), 90)
+    return GOAL_CURVE[t]
 
 
 def state_mult(diff):
@@ -75,6 +88,65 @@ def inplay(lh, la, hs, as_, minute, period, rh=0, ra=0):
     cells = sorted(((R[a, b], a + hs, b + as_) for a in range(6) for b in range(6)), reverse=True)[:5]
     return ({k: float(v) for k, v in p.items()}, tot_lines, [[int(a), int(b), round(float(v), 4)] for v, a, b in cells],
             (round(Lh, 3), round(La, 3)), rem)
+
+
+def _pois(L, n=9):
+    i = np.arange(n)
+    return np.exp(-L) * L ** i / np.array([math.factorial(k) for k in i])
+
+
+def extra_live(lh, la, hs, as_, minute, period, rh=0, ra=0):
+    """Ek canlı pazarlar: [(anahtar, etiket, olasılık)].
+    İlk yarı (yalnızca 1. yarıda): İY sonucu, İY 0,5/1,5 Alt-Üst. Takım golü: ev/dep bir sonraki iki çizgi. Sıradaki gol."""
+    mh = state_mult(hs - as_) * (RED_OWN ** rh) * (RED_OPP ** ra)
+    ma = state_mult(as_ - hs) * (RED_OWN ** ra) * (RED_OPP ** rh)
+    out = []
+    rem = max(1 - done_share(minute, period), 0.0)
+    Lh, La = lh * rem * mh, la * rem * ma
+    ph, pa = _pois(Lh), _pois(La)
+    for side, cur, pv, tag, nm_ in (("E", hs, ph, "Ev", "ev"), ("D", as_, pa, "Dep", "dep")):
+        cdf = np.cumsum(pv)
+        for k in range(cur, cur + 2):           # çizgi = k + 0,5: kalan gol ≥ k - cur + 1
+            line = k + 0.5; need = k - cur + 1
+            po = float(1 - cdf[need - 1])
+            out += [(f"{side}O{line}", f"{tag} gol {str(line).replace('.', ',')} Üst", po),
+                    (f"{side}U{line}", f"{tag} gol {str(line).replace('.', ',')} Alt", 1 - po)]
+    nog = float(ph[0] * pa[0])
+    if Lh + La > 0:
+        out += [("NEXT1", LABELS["NEXT1"], (1 - nog) * Lh / (Lh + La)), ("NEXT2", LABELS["NEXT2"], (1 - nog) * La / (Lh + La))]
+    if period == 1 and minute < 45:
+        r1 = max(done_share(45, 1) - done_share(minute, 1), 0.0)
+        R = np.outer(_pois(lh * r1 * mh), _pois(la * r1 * ma)); R /= R.sum()
+        I, J = np.meshgrid(range(R.shape[0]), range(R.shape[0]), indexing="ij")
+        H, A = I + hs, J + as_
+        out += [("IY1", "İY 1", float(R[H > A].sum())), ("IYX", "İY X", float(R[H == A].sum())), ("IY2", "İY 2", float(R[H < A].sum()))]
+        for line in (0.5, 1.5):
+            if hs + as_ < line:
+                po = float(R[H + A > line].sum())
+                out += [(f"IYO{line}", f"İY {str(line).replace('.', ',')} Üst", po), (f"IYU{line}", f"İY {str(line).replace('.', ',')} Alt", 1 - po)]
+    return out
+
+
+def ht_score(c):
+    """İlk yarı skoru, maç olaylarından (45+ uzatma golleri ilk yarıya sayılır). Tutarsızsa None."""
+    ids = {str((x.get("team") or {}).get("id") or x.get("id")): x["homeAway"] for x in c["competitors"]}
+    h = a = fh = fa = 0
+    for d in c.get("details") or []:
+        if not d.get("scoringPlay"):
+            continue
+        m = re.match(r"(\d+)", ((d.get("clock") or {}).get("displayValue") or ""))
+        side = ids.get(str((d.get("team") or {}).get("id")))
+        if not m or side is None:
+            return None
+        fh += side == "home"; fa += side == "away"
+        if int(m.group(1)) <= 45:
+            h += side == "home"; a += side == "away"
+    try:
+        sc = {x["homeAway"]: int(x["score"]) for x in c["competitors"]}
+    except (KeyError, ValueError, TypeError):
+        return None
+    # her golün takımı skorla birebir tutmalı (kendi kalesine gollerde yanlış takım yazılırsa sonuç verilmez)
+    return [h, a] if (fh, fa) == (sc.get("home"), sc.get("away")) else None
 
 
 def live_market(c):
@@ -127,11 +199,13 @@ LABELS = {"1": "MS 1", "X": "MS X", "2": "MS 2", "1X": "Çifte şans 1X", "X2": 
           "NEXT1": "Sıradaki golü ev sahibi atar", "NEXT2": "Sıradaki golü deplasman atar"}
 
 
-def picks_for(p, tl, minute, mkt, cur_goals=0):
-    """Canlı seçim adayları: olasılık %72–95 arası (çok kesin olanların oranı oynamaya değmez)."""
+def picks_for(p, tl, minute, mkt, cur_goals=0, extra=None):
+    """Canlı seçim adayları: olasılık %70–88 arası (çok kesin olanların oranı oynamaya değmez).
+    extra: extra_live() çıktısı (İY, takım golü, sıradaki gol)."""
     cand = []
     for k in ("1", "X", "2", "1X", "X2", "12"):
-        cand.append((k, LABELS[k], p[k]))
+        cand.append((k, LABELS[k], p[k] - (D12_FIX if k == "12" else 0)))
+    cand += list(extra or [])
     cand += [("BTTS", LABELS["BTTS"], p["BTTS"]), ("NBTTS", LABELS["NBTTS"], 1 - p["BTTS"] - KGY_FIX),
              ("GOAL", LABELS["GOAL"], 1 - p["NOGOAL"]), ("NOGOAL", LABELS["NOGOAL"], p["NOGOAL"])]
     for line, po in tl.items():
@@ -308,7 +382,9 @@ def main(datapath, outpath, prevpath=None, logdir=None):
                 score=[hs, as_], reds=[rh, ra], stats=[stats_of(sd["home"]), stats_of(sd["away"])],
                 pre=dict(lam=[round(lams[0], 3), round(lams[1], 3)], src=src, p=(hit[3] if hit else None)),
                 rest=rest, p={k: round(v, 4) for k, v in p.items()}, totals={k: round(v, 4) for k, v in tl.items()},
-                top=top, market=mkt, picks=picks_for(p, tl, minute, mkt, hs + as_),
+                top=top, market=mkt, picks=picks_for(p, tl, minute, mkt, hs + as_,
+                                                     extra_live(lams[0], lams[1], hs, as_, minute, period, rh, ra)),
+                ht=ht_score(c) if (period >= 2 or ev["status"]["type"]["name"] == "STATUS_HALFTIME") else None,
                 corners=cor, cards=list(team_cards(c)), cpicks=[cpk] if cpk else [],
             ))
     out.sort(key=lambda m: (-len(m["picks"]), -m["minute"]))
