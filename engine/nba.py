@@ -5,6 +5,7 @@ import json, gzip, urllib.request, time, sys
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 from scipy.stats import norm
+import engine as E
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/basketball/"
 LEAGUES = {"NBA": "nba", "WNBA": "wnba"}
@@ -53,7 +54,7 @@ def probs(o, lg="NBA"):
     """Piyasadan olasılıklar."""
     SD_MARGIN, SD_TOTAL = SD.get(lg, SD["NBA"])
     if o.get("h") and o.get("a"):
-        ph = (1 / o["h"]) / (1 / o["h"] + 1 / o["a"])
+        ph = E.fair(o, ("h", "a"))["h"]
     else:
         ph = float(norm.cdf(-o["spread"] / SD_MARGIN))
     exp_margin = -o["spread"] if o.get("spread") is not None else float(norm.ppf(ph) * SD_MARGIN)
@@ -69,7 +70,7 @@ def probs(o, lg="NBA"):
             line = o["total"] + d
             p["tot"][f"{line:.1f}"] = float(1 - norm.cdf(line, o["total"], SD_TOTAL))
     if o.get("h0") and o.get("a0"):
-        p["open1"] = (1 / o["h0"]) / (1 / o["h0"] + 1 / o["a0"])
+        p["open1"] = E.fair(o, ("h0", "a0"))["h0"]
     return p
 
 
