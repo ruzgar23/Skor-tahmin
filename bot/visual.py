@@ -153,7 +153,7 @@ import pages as PG
 SHORT_LG = {"Premier League": "Premier L.", "İskoçya Premiership": "İskoçya 1", "İskoçya Championship": "İskoçya 2",
             "İskoçya League One": "İskoçya 3", "İskoçya League Two": "İskoçya 4", "Yunanistan Süper Lig": "Yunanistan",
             "Şampiyonlar Ligi": "Şamp. Ligi", "Konferans Ligi": "Konf. Ligi", "2. Bundesliga": "Bundesliga 2"}
-FOOT = ("Yeşil kutu güçlü seçim, turuncu kutu orta seçim. Oran, yazan sınırın altındaysa oynama.",
+FOOT = ("Yeşil kutu güçlü, turuncu kutu orta, mavi kutu ek seçim (ilk yarı / takım golü). Kutusu olmayan maçta %60'ı geçen net seçim yok, zorlama. Oran, yazan sınırın altındaysa oynama.",
         "Olasılıklar garanti değildir. Kaybetmeyi göze alamayacağın parayla oynama.")
 
 
@@ -171,7 +171,11 @@ def all_matches_images(data, basket, day):
         if m["lgName"] != cur:
             cur = m["lgName"]; blocks.append(("head", cur))
         mm = dict(m, time=ko_local(m).strftime("%H:%M"), league_short=SHORT_LG.get(m["lgName"], m["lgName"]))
-        blocks.append(PG.football_row(mm, core.grade(m), nm))
+        g = core.grade(m)
+        if not g or g["tier"] < 2:   # ana seçim yoksa ek seçim (ilk yarı / takım golü) gösterilir
+            x = core.extra_pick(m)
+            g = dict(x, tier=4) if x else None
+        blocks.append(PG.football_row(mm, g, nm))
     if blocks:
         out += PG.paginate("FUTBOL · BUGÜNÜN MAÇLARI", f"{tr_date(day)} · {len(ms)} maç", blocks, FOOT, cards.SPORT["futbol"][0])
     bk = sorted(extra.basket_upcoming(basket, hours=30), key=lambda g: g["ko"])

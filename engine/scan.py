@@ -214,6 +214,13 @@ def main(datadir, outpath, skip_download=False, prev=None, histpath=None, seed=N
     for m in matches:
         if m["season"] == E.SEASONS[-1]:
             names.setdefault(m["lg"], set()).update([m["home"], m["away"]])
+    # football-data fikstüründe takım adı sonuç dosyasından farklı yazılabiliyor ("Sheffield Utd" / "Sheffield United"):
+    # adları sonuçlardaki adlara eşle, yoksa aynı maç iki kez listelenir
+    def _fdname(lg, t):
+        if t in names.get(lg, ()):
+            return t
+        return espn.match_name(t, names.get(lg, set()), strict=True) or t
+    fdx = {(lg, _fdname(lg, h), _fdname(lg, a)): v for (lg, h, a), v in fdx.items()}
     try:
         efx, unmatched = espn.fixtures(names, now=now)
     except Exception as e:
