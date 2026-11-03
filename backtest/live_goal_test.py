@@ -37,11 +37,13 @@ for m in G:
     rows.append((m, x))
 print(f"ESPN maç {len(G)}, oranla eşleşen (skor kontrollü) {len(rows)}; ligler {dict(collections.Counter(m['lg'] for m, _ in rows))}\n")
 
-MINS = [(t, 1) for t in range(15, 45, 5)] + [(t, 2) for t in range(50, 80, 5)]
+MINS = [(t, 1) for t in range(15, 45, 5)] + [(45, 1)] + [(t, 2) for t in range(50, 80, 5)]  # (45, 1) = devre arası
 fam = collections.defaultdict(lambda: collections.defaultdict(lambda: [0, 0, 0.0]))
 
 
 def famof(k):
+    if k.startswith("SHO") or k.startswith("SHU"): return "2Y " + ("Üst" if k[2] == "O" else "Alt") + " " + k[3:]
+    if k.startswith("SH"): return "2Y sonucu"
     if k.startswith("IYO") or k.startswith("IYU"): return "İY " + ("Üst" if k[2] == "O" else "Alt") + " " + k[3:]
     if k.startswith("IY"): return "İY sonucu"
     if k.startswith("NEXT"): return "Sıradaki gol"
@@ -50,6 +52,10 @@ def famof(k):
 
 def outcome(k, m, t):
     ht = [sum(1 for mn, s in m["goals"] if mn <= 45 and s == side) for side in "ha"]
+    if k.startswith("SH"):
+        a, b = m["hs"] - ht[0], m["as_"] - ht[1]
+        if k in ("SH1", "SHX", "SH2"): return {"SH1": a > b, "SHX": a == b, "SH2": a < b}[k]
+        return (a + b > float(k[3:])) == (k[2] == "O")
     if k == "IY1": return ht[0] > ht[1]
     if k == "IYX": return ht[0] == ht[1]
     if k == "IY2": return ht[0] < ht[1]
@@ -86,7 +92,8 @@ def run(curve):
         for t, per in MINS:
             hs = sum(1 for mn, s in m["goals"] if mn <= t and s == "h"); as_ = sum(1 for mn, s in m["goals"] if mn <= t and s == "a")
             rh = sum(1 for mn, s in m["reds"] if mn <= t and s == "h"); ra = sum(1 for mn, s in m["reds"] if mn <= t and s == "a")
-            for k, lab, pr in L.extra_live(lh, la, hs, as_, t, per, rh, ra):
+            htv = [sum(1 for mn, s in m["goals"] if mn <= 45 and s == side) for side in "ha"] if (per == 2 or t == 45) else None
+            for k, lab, pr in L.extra_live(lh, la, hs, as_, t, per, rh, ra, htv, t == 45):
                 if not (0.70 <= pr <= 0.88): continue
                 b = "70-76" if pr < .76 else ("76-82" if pr < .82 else "82-88")
                 w = outcome(k, m, t)

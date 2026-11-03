@@ -329,7 +329,8 @@ def live_tick(st):
     alerts = []
     for a in lv.get("alerts", []):
         m = by_id.get(a["id"])
-        pk = next((p for p in (m or {}).get("picks", []) + (m or {}).get("cpicks", []) if p["k"] == a["k"]), None)
+        pk = next((p for p in (m or {}).get("picks", []) + (m or {}).get("cpicks", []) + (m or {}).get("hpicks", [])
+                   if p["k"] == a["k"]), None)
         if m and pk: alerts.append((m, pk))
     if alerts:
         broadcast_rich(st, imgs_or(visual.live_images, alerts[:8]), core.live_alert_message(alerts[:8]))
@@ -449,7 +450,7 @@ def settle_live(st, live_by_id):
             continue
         b["cur"] = score
         r = extra.live_settle(b["k"], b["s0"], score, final, corners, ht, fh)
-        if r == "?" or (r is None and final and ((b["k"].startswith("C") and corners is None) or (b["k"].startswith("IY") and ht is None))):
+        if r == "?" or (r is None and final and ((b["k"].startswith("C") and corners is None) or (b["k"].startswith(("IY", "SH")) and ht is None))):
             b["ok"] = "?"  # sonuç kesinleştirilemedi (korner sayısı / devre skoru / gol sırası yok); karneye girmez
             continue
         if r is None:
@@ -485,7 +486,8 @@ def live():
             alerts = []
             for a in lv.get("alerts", []):
                 m = by_id.get(a["id"])
-                pk = next((p for p in (m or {}).get("picks", []) + (m or {}).get("cpicks", []) if p["k"] == a["k"]), None)
+                pk = next((p for p in (m or {}).get("picks", []) + (m or {}).get("cpicks", []) + (m or {}).get("hpicks", [])
+                   if p["k"] == a["k"]), None)
                 if m and pk: alerts.append((m, pk))
             if alerts:
                 broadcast_rich(st, imgs_or(visual.live_images, alerts[:8]), core.live_alert_message(alerts[:8]))

@@ -416,6 +416,17 @@ def live_settle(k, s0, s, final, corners=None, ht=None, first_half=False):
         if k in ("IY1", "IYX", "IY2"):
             return {"IY1": a > b, "IYX": a == b, "IY2": a < b}[k]
         return (a + b > float(k[3:])) == (k[2] == "O")
+    if k.startswith("SH"):   # ikinci yarı: devre skorundan sonraki goller
+        if ht is None:
+            return None
+        a, b = s[0] - ht[0], s[1] - ht[1]
+        if k[2:3] in ("O", "U"):
+            if a + b > float(k[3:]):
+                return k[2] == "O"
+            return (k[2] == "U") if final else None
+        if not final:
+            return None
+        return {"SH1": a > b, "SHX": a == b, "SH2": a < b}[k]
     if k[:2] in ("EO", "EU", "DO", "DU"):
         g = s[0] if k[0] == "E" else s[1]; line = float(k[2:])
         if g > line:

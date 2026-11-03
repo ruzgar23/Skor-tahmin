@@ -116,3 +116,8 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
 - `/mac takım`: MS & 2,5 Alt/Üst, MS & KG, çifte şans & 2,5 olasılıkları ve adil oranları.
 - `/kupon`: `galatasaray 1 2.5 üst 2.40`, `barcelona 1 kg 3.10`, `arsenal 1x 2.5 alt 2.05`, `lazio iy 1.5 alt 1.40` gibi satırlar.
 - Günlük seçim olarak verilmez: 8 sezonda %60+ olasılıklı birleşik seçim haftada birkaç tane ve Orta seviyesinde (%65) tutuyor. Test: `backtest/combo_test.py`.
+
+## İkinci yarı bahisleri ve devre arası bildirimi
+- **Yeni canlı pazarlar:** 2Y sonucu (1/X/2) ve 2Y 0,5/1,5 Alt-Üst; devre arasında ve ikinci yarıda, devre skoru (maç olaylarından) biliniyorsa. Sonuç, devreden sonraki gollerle belirlenir.
+- **Devre arası bildirimi:** Her maç için devre arasında bir kez, ikinci yarı pazarlarından %70–88 arası en olası seçim (gol ve korner bildirimlerinden ayrı). Testte 2025-26'da %79,8 (beklenen %79,1), 2023-25'te %79,7 (beklenen %78,9) tuttu; çoğu "2Y 0,5 Üst".
+- 2Y sonucu 2023-25'te kalibre, 2025-26'da ~3 puan iyimserdi; iki dönemin ortalaması kadar (1,5 puan) düşük gösterilir. 2Y 0,5 Üst %77,9 (beklenen %77,2), 2Y 1,5 Alt %78,8 (beklenen %78,3).
