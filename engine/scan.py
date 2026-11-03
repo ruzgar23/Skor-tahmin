@@ -42,6 +42,10 @@ def full_probs(lh, la, htr):
     H = E.score_matrix(lh * htr, la * htr, 0)
     h = E.markets(H)
     p.update({"HT1": h["1"], "HTX": h["X"], "HT2": h["2"], "HTO05": 1 - H[0, 0], "HTO15": h["O15"]})
+    # takım gol alt/üst (ev: HO05/HO15/HO25, deplasman: AO05/AO15/AO25)
+    n = M.shape[0]; I, J = np.meshgrid(range(n), range(n), indexing="ij")
+    for L in range(3):
+        p[f"HO{L}5"] = float(M[I > L].sum()); p[f"AO{L}5"] = float(M[J > L].sum())
     cells = sorted(((M[i, j], i, j) for i in range(8) for j in range(8)), reverse=True)[:8]
     return p, M, [[i, j, round(float(v), 4)] for v, i, j in cells]
 
@@ -114,7 +118,8 @@ def cup_lambdas(models, home, hlg, away, alg):
     return math.exp(base + 0.12 + ah - da), math.exp(base + aa - dh), (kh, ka)
 
 
-HIST_P = ("1", "X", "2", "1X", "12", "X2", "O15", "O25", "O35", "BTTS", "HT1", "HTX", "HT2", "HTO05", "HTO15")
+HIST_P = ("1", "X", "2", "1X", "12", "X2", "O15", "O25", "O35", "BTTS", "HT1", "HTX", "HT2", "HTO05", "HTO15",
+          "HO05", "HO15", "HO25", "AO05", "AO15", "AO25")
 
 
 def slim(m):

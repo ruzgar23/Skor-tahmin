@@ -20,6 +20,8 @@ KGY_FIX = 0.02  # devre arası testinde (29.368 maç) KG Yok olasılığı ~2 pu
 # toplam negatif binom. 55–80. dakika seçimleri testte %83,4 tuttu (beklenen %83,5).
 CORNER = dict(share=0.922, w=0.1654, behind=0.1573, ahead=-0.2363, red_own=-0.4209, red_opp=0.4693, stop=6.75, r=24.05)
 CORNER_MIN, CORNER_MAX = 55, 80
+# Yalnızca testte yeterli dakika verisi olan ligler (Süper Lig'de ESPN korner dakikası vermiyor; veri birikince eklenecek)
+CORNER_LEAGUES = {"E0", "E1", "SP1", "SP2", "I1", "N1", "F1", "P1", "D1"}
 
 
 def minute_of(status):
@@ -296,7 +298,7 @@ def main(datapath, outpath, prevpath=None, logdir=None):
             mkt = live_market(c)
             cor = corners_of(c)
             cpk = None
-            if cor and hit and lg in TOP:
+            if cor and hit and lg in CORNER_LEAGUES:
                 cpk = corner_pick(hit[4][0], hit[4][1], cor[0], cor[1], hs, as_, minute, period, rh, ra)
             lgname = espn.CUP_NAMES.get(lg) or E.LEAGUE_NAMES.get(lg, lg)
             out.append(dict(

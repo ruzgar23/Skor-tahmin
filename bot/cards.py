@@ -18,7 +18,8 @@ def F(size, bold=False):
 BG = (238, 241, 243); PANEL = (255, 255, 255); INK = (21, 33, 43); MUTED = (93, 107, 117); LINE = (214, 221, 226)
 GREEN = (29, 107, 71); GREEN_SOFT = (220, 239, 228); AMBER = (163, 93, 0); AMBER_SOFT = (251, 238, 216)
 RED = (163, 64, 44); BLUE = (47, 93, 138); GREY = (138, 150, 160); HEAD = (21, 33, 43)
-TIER = {3: (GREEN, GREEN_SOFT, "GÜÇLÜ", "★★★"), 2: (AMBER, AMBER_SOFT, "ORTA", "★★☆")}
+BLUE_SOFT = (222, 233, 244)
+TIER = {3: (GREEN, GREEN_SOFT, "GÜÇLÜ", "★★★"), 2: (AMBER, AMBER_SOFT, "ORTA", "★★☆"), 4: (BLUE, BLUE_SOFT, "EK SEÇİM", "")}
 W = 1080
 
 
@@ -90,7 +91,7 @@ def daily_card(title, sub, sections, footer):
             d.rectangle((36, y + 14, 48, y + CH - 14), fill=col)
             x0, xr = 76, W - 76
             # 1: saat · lig  |  güven · birim
-            conf = tname + {3: " · 1 birim", 2: " · ½ birim"}.get(it["tier"], "")
+            conf = tname + {3: " · 1 birim", 2: " · ½ birim", 4: " · ½ birim"}.get(it["tier"], "")
             cw = d.textlength(conf, font=F(26, True))
             d.text((xr - cw, y + 22), conf, font=F(26, True), fill=col)
             d.text((x0, y + 22), _fit(d, f"{it['time']} · {it['league']}", F(26), xr - cw - x0 - 24), font=F(26), fill=MUTED)

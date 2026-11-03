@@ -95,8 +95,13 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
 - Test: `python -I backtest/margin_test.py <football-data klasörü>` (klasör yapısı: `<sezon>/<lig>.csv`).
 
 ## Canlı korner, kural düzeltmeleri ve canlı veri kaydı
-- **Canlı korner:** 55–80. dakika arasında korner alt/üst seçimi (maç başına bir kez, üst liglerde). Kalan korner; takımların maç öncesi korner beklentisi, maç içi tempo, skor durumu (geride olan %17 fazla, önde olan %21 az), kırmızı kartlar ve ~6,8 dakikalık uzatma ile hesaplanır.
-  ESPN anlatımlarından 7.092 maçlık testte (2023-25 öğrenme, 2025-26 test) seçimlerin %83,4'ü tuttu (beklenen %83,5). Süper Lig'de dakika verisi olmadığı için orada test edilmedi. Test: `backtest/live_events.py` + `backtest/live_corner_test.py`.
+- **Canlı korner:** 55–80. dakika arasında korner alt/üst seçimi (maç başına bir kez; yalnızca testte verisi olan liglerde: Premier League, Championship, La Liga 1–2, Serie A, Eredivisie, Ligue 1, Portekiz, Bundesliga). Kalan korner; takımların maç öncesi korner beklentisi, maç içi tempo, skor durumu (geride olan %17 fazla, önde olan %21 az), kırmızı kartlar ve ~6,8 dakikalık uzatma ile hesaplanır.
+  ESPN anlatımlarından 7.092 maçlık testte (2023-25 öğrenme, 2025-26 test) seçimlerin %83,4'ü tuttu (beklenen %83,5). Süper Lig'de dakika verisi olmadığı için orada şimdilik öneri verilmez; canlı veri kaydı biriktikçe eklenecek. Test: `backtest/live_events.py` + `backtest/live_corner_test.py`.
 - **2,5 Üst artık en fazla Orta:** %70 üstü 2,5 Üst seçimleri 8 sezonda %70–74 tutuyordu (MS Güçlü ~%79). Güçlü seçimler artık yalnızca MS: %78,7.
 - **Canlı KG Yok:** olasılığı 2 puan düşürülerek gösterilir (devre arası testinde ~2 puan iyimserdi). Düzeltme sonrası %77,9 tuttu, beklenen %77,7.
 - **Canlı veri kaydı:** her canlı kontrolde dakika, skor, korner, kart ve şut sayıları `state/run/live_log/` altına aylık dosyalara yazılır (yalnızca değişen anlar). Bu veri birikince Süper Lig ve kart pazarları da test edilebilecek.
+
+## Ek seçimler: ilk yarı ve takım golü
+- Günün seçimlerinde yeni bölüm: **İY 0,5 Üst, İY 1,5 Alt, Ev/Dep gol 0,5–1,5 Üst, Ev/Dep gol 1,5–2,5 Alt**. Maç başına en fazla bir ek seçim, olasılığı %70–80 arası, günde en çok 6 tane; karnede ayrıca sayılır.
+- 7 sezonluk testte (24.863 seçim) %76,9 tuttu (beklenen %76,0); her sezon %76–78. Bot kodu 2025-26'da %76,5 tuttu. Test: `backtest/new_markets_test.py`.
+- **Eklenmeyenler:** Asya handikabında model ile piyasa farkından kâr çıkmadı (−%6 / −%9). Handikaplı çifte şans iddaa'da olmadığından Avrupa handikabı eklenmedi. İY maç sonucu çok az seçim üretiyor.
