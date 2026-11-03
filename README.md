@@ -87,3 +87,9 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
   Tenis için geçmiş oran verisi olmadığından kârlılık test edilemedi. Komut: `/tenis`.
 - **NBA:** 2025-26 testinde (1.164 maç) Güçlü (≥%75) seçimler %82, Orta (%65-75) seçimler %73 kazandı. Handikap ve alt/üst ~%50 tuttuğu için bunlara öneri verilmez.
 - Testler `backtest/diger_sporlar/` klasöründe.
+
+## Büro payı yöntemi (backtest ile değişti)
+- Adil olasılık artık **power** yöntemiyle hesaplanıyor (önceden oransal). 25.907 maçlık testte (2019-26, 12 lig) oransal yöntem %65+ favorilerin olasılığını 2–4 puan düşük gösteriyordu; power ile fark 0–1,5 puana indi ve log-loss tüm kaynaklarda iyileşti.
+- Etkisi: daha fazla maç Güçlü eşiğini geçer (haftada ~10,6 → ~13,2), Güçlü tutma oranı %79,8 → %78,3 olur ama gösterilen olasılık gerçeğe daha yakındır. Ortalama orana göre getiri değişmedi (her iki yöntemde ≈ −%1,3).
+- Pinnacle oranları piyasa ortalamasından çok az daha isabetli; fark seçimlere yansımadığı için kaynak değiştirilmedi. Maça yakın (kapanış) oranlar belirgin şekilde daha iyi; teyit adımı bu yüzden işe yarıyor.
+- Test: `python -I backtest/margin_test.py <football-data klasörü>` (klasör yapısı: `<sezon>/<lig>.csv`).

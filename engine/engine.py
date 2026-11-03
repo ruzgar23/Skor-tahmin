@@ -203,5 +203,21 @@ def markets(M):
 
 
 def fair(o, keys):
-    s = sum(1 / o[k] for k in keys)
-    return {k: (1 / o[k]) / s for k in keys}
+    """Büro payını çıkarır (power yöntemi): p_i = (1/o_i)^k, toplam 1 olacak k bulunur.
+    Oransal yönteme göre favorileri daha doğru fiyatlar; 25.907 maçlık testte (2019-26, 12 lig)
+    oransal yöntem %70+ favorilerin olasılığını 2-4 puan düşük gösteriyordu, power ile fark ~0-1,5 puan."""
+    q = {k: 1 / o[k] for k in keys}
+    lo, hi = 0.5, 3.0
+    if sum(v ** lo for v in q.values()) < 1 or sum(v ** hi for v in q.values()) > 1:
+        s = sum(q.values())  # beklenmedik oranlar: oransal yönteme dön
+        return {k: v / s for k, v in q.items()}
+    for _ in range(60):  # ikiye bölme: toplam k'ya göre azalır
+        mid = (lo + hi) / 2
+        if sum(v ** mid for v in q.values()) > 1:
+            lo = mid
+        else:
+            hi = mid
+    k = (lo + hi) / 2
+    p = {kk: v ** k for kk, v in q.items()}
+    s = sum(p.values())
+    return {kk: v / s for kk, v in p.items()}

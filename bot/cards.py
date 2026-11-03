@@ -64,49 +64,51 @@ def _wrap(d, text, font, maxw):
 
 
 def _footer(d, y, text):
-    for ln in _wrap(d, text, F(20), W - 96):
-        d.text((48, y), ln, font=F(20), fill=MUTED); y += 30
+    for ln in _wrap(d, text, F(26), W - 96):
+        d.text((48, y), ln, font=F(26), fill=MUTED); y += 38
     return y
 
 
 def daily_card(title, sub, sections, footer):
     """sections: [(başlık, [satır])]; satır: dict(time, league, home, away, pick, prob, min_odds, tier, note)"""
+    # Telefonda görsel ~1/3 boyuta küçülür: en küçük yazı 26 px. Kart başına üç satır:
+    # (1) saat · lig ve güven, (2) maç, (3) büyük seçim + olasılık, sağda en düşük oran.
+    # Güven yalnızca renkle (sol şerit + seçim kutusu) gösterilir; yıldız ve çubuk yok.
     rows = sum(len(r) for _, r in sections); n_sec = sum(1 for _, r in sections if r)
-    H = 150 + 30 + n_sec * 70 + rows * 178 + 260
+    CH = 236
+    H = 150 + 30 + n_sec * 78 + rows * (CH + 18) + 320
     img = Image.new("RGB", (W, H), BG); d = ImageDraw.Draw(img)
     _header(d, title, sub)
     y = 180
     for head, items in sections:
         if not items:
             continue
-        d.text((48, y + 14), head, font=F(30, True), fill=INK); y += 70
+        d.text((48, y + 16), head, font=F(34, True), fill=INK); y += 78
         for it in items:
-            col, soft, tname, stars = TIER.get(it["tier"], (GREY, LINE, "", ""))
-            _rr(d, (36, y, W - 36, y + 162), 18, PANEL, LINE, 2)
-            d.rectangle((36, y + 12, 46, y + 150), fill=col)
-            # sol: saat + lig
-            d.text((70, y + 22), it["time"], font=F(34, True), fill=INK)
-            d.text((70, y + 66), _fit(d, it["league"], F(20), 190), font=F(20), fill=MUTED)
-            d.text((70, y + 98), stars, font=F(26, True), fill=col)
-            d.text((70, y + 130), tname + {3: " · 1 BİRİM", 2: " · ½ BİRİM"}.get(it["tier"], ""), font=F(18, True), fill=col)
-            # orta: takımlar + seçim
-            x0 = 290
-            d.text((x0, y + 18), _fit(d, f"{it['home']} – {it['away']}", F(30, True), 500), font=F(30, True), fill=INK)
-            badge = f"OYNA: {it['pick']}"
-            bw = int(d.textlength(badge, font=F(28, True))) + 36
-            _rr(d, (x0, y + 66, x0 + bw, y + 112), 12, soft)
-            d.text((x0 + 18, y + 72), badge, font=F(28, True), fill=col)
-            _bar(d, x0, y + 128, 300, 16, it["prob"], col)
-            d.text((x0 + 314, y + 120), f"%{round(it['prob'] * 100)} tutar", font=F(22, True), fill=INK)
-            # sağ: en az oran
-            xr = W - 260
-            _rr(d, (xr, y + 22, W - 60, y + 140), 14, BG)
-            d.text((xr + 20, y + 32), "iddaa oranı", font=F(20), fill=MUTED)
-            d.text((xr + 20, y + 58), f"≥ {it['min_odds']:.2f}".replace(".", ","), font=F(40, True), fill=INK)
-            d.text((xr + 20, y + 108), "ise oyna", font=F(20), fill=MUTED)
-            if it.get("note"):
-                d.text((x0 + 520, y + 22), "", font=F(18), fill=MUTED)
-            y += 178
+            col, soft, tname, _ = TIER.get(it["tier"], (GREY, LINE, "", ""))
+            _rr(d, (36, y, W - 36, y + CH), 20, PANEL, LINE, 2)
+            d.rectangle((36, y + 14, 48, y + CH - 14), fill=col)
+            x0, xr = 76, W - 76
+            # 1: saat · lig  |  güven · birim
+            conf = tname + {3: " · 1 birim", 2: " · ½ birim"}.get(it["tier"], "")
+            cw = d.textlength(conf, font=F(26, True))
+            d.text((xr - cw, y + 22), conf, font=F(26, True), fill=col)
+            d.text((x0, y + 22), _fit(d, f"{it['time']} · {it['league']}", F(26), xr - cw - x0 - 24), font=F(26), fill=MUTED)
+            # 2: maç
+            d.text((x0, y + 62), _fit(d, f"{it['home']} – {it['away']}", F(36, True), xr - x0), font=F(36, True), fill=INK)
+            # 3: seçim kutusu + olasılık
+            pick = _fit(d, it["pick"], F(40, True), 520)
+            bw = int(d.textlength(pick, font=F(40, True))) + 44
+            _rr(d, (x0, y + 128, x0 + bw, y + 200), 14, soft)
+            d.text((x0 + 22, y + 140), pick, font=F(40, True), fill=col)
+            d.text((x0 + bw + 22, y + 140), f"%{round(it['prob'] * 100)}", font=F(40, True), fill=INK)
+            # sağ alt: en düşük oran
+            ov = f"{it['min_odds']:.2f}".replace(".", ",")
+            ow = d.textlength(ov, font=F(40, True))
+            d.text((xr - ow, y + 152), ov, font=F(40, True), fill=INK)
+            lb = "iddaa en az"
+            d.text((xr - d.textlength(lb, font=F(26)), y + 118), lb, font=F(26), fill=MUTED)
+            y += CH + 18
     y = _footer(d, y + 16, footer[0]); y = _footer(d, y + 4, footer[1])
     return _png(img.crop((0, 0, W, y + 30)))
 

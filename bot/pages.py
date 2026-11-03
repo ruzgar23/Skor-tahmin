@@ -77,21 +77,26 @@ def _badge(d, x, y, text, col, soft, size=20):
 def football_row(m, g, nm):
     p = m["p"]
 
+    # Sade satır: saat · maç / 1-X-2 yüzdeleri düz yazı / gol pazarları. Seçim varsa sağda renkli kutu.
     def draw(d, y):
-        d.text((60, y + 18), m["time"], font=F(26, True), fill=INK)
-        d.text((60, y + 54), _fit(d, m["league_short"], F(16), 110), font=F(16), fill=MUTED)
-        d.text((190, y + 14), _fit(d, f"{nm(m['home'])} – {nm(m['away'])}", F(26, True), 560), font=F(26, True), fill=INK)
-        _stack(d, 190, y + 56, 420, 30, [(p["1"], GREEN, f"1 {_pct(p['1'])}"), (p["X"], GREY, f"X {_pct(p['X'])}"), (p["2"], BLUE, f"2 {_pct(p['2'])}")])
-        t = m["top"][0]
-        d.text((632, y + 58), f"2,5Ü {_pct(p['O25'])} · KG {_pct(p['BTTS'])}", font=F(18), fill=INK)
-        d.text((632, y + 82), f"skor {t[0]}-{t[1]}", font=F(18), fill=MUTED)
+        x0, xr = 60, W - 60
+        right = 0
         if g and g["tier"] >= 2:
-            col, soft, _, stars = TIER[g["tier"]]
-            txt = f"{stars} {g['label'].upper()}"
-            tw = int(d.textlength(txt, font=F(18, True))) + 24
-            _badge(d, W - 60 - tw, y + 12, txt, col, soft, 18)
-            d.text((W - 60 - tw, y + 58), f"oran ≥ {_odds(g['minOdds'])}", font=F(18, True), fill=col)
-    return ("row", 118, draw)
+            col, soft, _, _ = TIER[g["tier"]]
+            txt = g["label"].upper()
+            right = _badge(d, xr - int(d.textlength(txt, font=F(28, True))) - 24, y + 18, txt, col, soft, 28)
+            sub = f"en az {_odds(g['minOdds'])}"
+            d.text((xr - d.textlength(sub, font=F(26)), y + 82), sub, font=F(26), fill=MUTED)
+            right = max(right, int(d.textlength(sub, font=F(26)))) + 24
+        d.text((x0, y + 20), _fit(d, f"{m['time']}  {nm(m['home'])} – {nm(m['away'])}", F(32, True), xr - right - x0),
+               font=F(32, True), fill=INK)
+        fav = max(("1", "X", "2"), key=lambda k: p[k]); x = x0
+        for k in ("1", "X", "2"):
+            s = f"{k} {_pct(p[k])}"; f = F(30, True) if k == fav else F(30)
+            d.text((x, y + 72), s, font=f, fill=INK if k == fav else MUTED); x += d.textlength(s, font=f) + 34
+        t = m["top"][0]
+        d.text((x0, y + 118), f"2,5 Üst {_pct(p['O25'])} · KG {_pct(p['BTTS'])} · skor {t[0]}-{t[1]}", font=F(26), fill=MUTED)
+    return ("row", 166, draw)
 
 
 def basket_row(g, gr):

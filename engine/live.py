@@ -86,7 +86,7 @@ def live_market(c):
     if po and pu and line:
         try:
             ln = float(str(line).lstrip("ou"))
-            out["total"] = dict(line=ln, over=(1 / po) / (1 / po + 1 / pu), oo=po, uo=pu)
+            out["total"] = dict(line=ln, over=E.fair({"O": po, "U": pu}, ("O", "U"))["O"], oo=po, uo=pu)
         except ValueError:
             pass
     return out or None
