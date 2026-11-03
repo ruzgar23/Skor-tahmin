@@ -115,6 +115,48 @@ def settle_extra(label, res, ht=None):
     return v < line if under else v > line
 
 
+# Birleşik bahisler (MS / çifte şans + 2,5 Alt-Üst, MS + KG): skor matrisinden.
+# backtest/combo_test.py: 29.374 maçta kalibre (%60+ dediği %62–66 tuttu); seçim olarak değil, /mac ve /kupon'da bilgi olarak.
+COMBO_RES = {"1": lambda i, j: i > j, "X": lambda i, j: i == j, "2": lambda i, j: i < j,
+             "1X": lambda i, j: i >= j, "X2": lambda i, j: i <= j, "12": lambda i, j: i != j}
+COMBO_TOT = {("gol", "O", 1.5): ("1,5 Üst", lambda i, j: i + j >= 2), ("gol", "U", 1.5): ("1,5 Alt", lambda i, j: i + j <= 1),
+             ("gol", "O", 2.5): ("2,5 Üst", lambda i, j: i + j >= 3), ("gol", "U", 2.5): ("2,5 Alt", lambda i, j: i + j <= 2),
+             ("gol", "O", 3.5): ("3,5 Üst", lambda i, j: i + j >= 4), ("gol", "U", 3.5): ("3,5 Alt", lambda i, j: i + j <= 3),
+             "BTTS": ("KG Var", lambda i, j: i > 0 and j > 0), "NBTTS": ("KG Yok", lambda i, j: not (i > 0 and j > 0))}
+RES_LBL = {"1": "MS 1", "X": "MS X", "2": "MS 2", "1X": "1X", "X2": "X2", "12": "12"}
+
+
+def combo_prob(m, res, tot):
+    """P(sonuç ve toplam/KG) ya da None. m["M"]: 6x6 skor matrisi."""
+    M = m.get("M")
+    if not M or res not in COMBO_RES or tot not in COMBO_TOT:
+        return None
+    rf, (_, tf) = COMBO_RES[res], COMBO_TOT[tot]
+    s = sum(sum(r) for r in M)
+    v = sum(M[i][j] for i in range(len(M)) for j in range(len(M)) if rf(i, j) and tf(i, j))
+    return v / s if s else None
+
+
+def combo_label(res, tot):
+    return f"{RES_LBL[res]} & {COMBO_TOT[tot][0]}"
+
+
+def combo_lines(m):
+    """/mac için birleşik bahis olasılıkları: [(başlık, [(etiket, olasılık)])]."""
+    def row(pairs):
+        out = []
+        for res, tot in pairs:
+            v = combo_prob(m, res, tot)
+            if v is not None:
+                out.append((combo_label(res, tot), v))
+        return out
+    U, A = ("gol", "O", 2.5), ("gol", "U", 2.5)
+    rows = [("MS & 2,5", row([("1", U), ("1", A), ("X", A), ("2", U), ("2", A)])),
+            ("MS & KG", row([("1", "BTTS"), ("1", "NBTTS"), ("2", "BTTS"), ("2", "NBTTS")])),
+            ("Çifte şans & 2,5", row([("1X", U), ("1X", A), ("X2", U), ("X2", A)]))]
+    return [(h, r) for h, r in rows if r]
+
+
 def extra_results(history, day):
     """Dünün ek seçim sonuçları: [(maç, seçim, tuttu mu)]."""
     out = []
@@ -233,6 +275,12 @@ def match_message(data, q):
              f"KG Var {pct(p['BTTS'])} · İY 1/X/2 {pct(p['HT1'])}/{pct(p['HTX'])}/{pct(p['HT2'])}",
              f"En olası skorlar: {tops}",
              f"Gol beklentisi: {m['lam'][0]:.2f} – {m['lam'][1]:.2f}".replace(".", ",")]
+    cl = combo_lines(m)
+    if cl:
+        lines.append("")
+        lines.append("<b>Birleşik bahisler</b> (olasılık · adil oran)")
+        for h, r in cl:
+            lines.append(" · ".join(f"{lab} {pct(v)} ({odds_fmt(1 / v)})" for lab, v in r if v > 0.02))
     import extra
     lines += extra.stat_lines(m)
     if g:

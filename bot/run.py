@@ -421,9 +421,10 @@ def settle_live(st, live_by_id):
     for key, b in bets.items():
         if b.get("ok") is not None:
             continue
-        m = by_eid.get(b["eid"]); final = False; score = None; corners = None
+        m = by_eid.get(b["eid"]); final = False; score = None; corners = None; ht = None; fh = False
         if m:
-            score = m["score"]; corners = m.get("corners")
+            score = m["score"]; corners = m.get("corners"); ht = m.get("ht")
+            fh = m.get("period") == 1 and not m.get("halftime")
         elif b.get("eid") and b.get("slug"):
             t0 = datetime.fromisoformat(b["ts"])
             for d in sorted({t0.date(), (t0 + timedelta(hours=3)).date()}):
@@ -440,17 +441,18 @@ def settle_live(st, live_by_id):
                     except (KeyError, ValueError, TypeError):
                         score = None
                     final = ev["status"]["type"]["state"] == "post"
-                    corners = L.corners_of(c)
+                    corners = L.corners_of(c); ht = L.ht_score(c)
             if score is None and now - datetime.fromisoformat(b["ts"]) > timedelta(hours=6):
                 b["ok"] = "?"  # sonuç bulunamadı; karneye girmez
                 continue
         if score is None:
             continue
         b["cur"] = score
-        r = extra.live_settle(b["k"], b["s0"], score, final, corners)
+        r = extra.live_settle(b["k"], b["s0"], score, final, corners, ht, fh)
+        if r == "?" or (r is None and final and ((b["k"].startswith("C") and corners is None) or (b["k"].startswith("IY") and ht is None))):
+            b["ok"] = "?"  # sonuç kesinleştirilemedi (korner sayısı / devre skoru / gol sırası yok); karneye girmez
+            continue
         if r is None:
-            if final and b["k"].startswith("C") and corners is None:
-                b["ok"] = "?"  # korner sayısı alınamadı; karneye girmez
             continue
         b["ok"] = r; b["res"] = score; b["done_at"] = now.isoformat()
         if corners: b["cres"] = corners

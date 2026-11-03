@@ -105,3 +105,14 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
 - Günün seçimlerinde yeni bölüm: **İY 0,5 Üst, İY 1,5 Alt, Ev/Dep gol 0,5–1,5 Üst, Ev/Dep gol 1,5–2,5 Alt**. Maç başına en fazla bir ek seçim, olasılığı %70–80 arası, günde en çok 6 tane; karnede ayrıca sayılır.
 - 7 sezonluk testte (24.863 seçim) %76,9 tuttu (beklenen %76,0); her sezon %76–78. Bot kodu 2025-26'da %76,5 tuttu. Test: `backtest/new_markets_test.py`.
 - **Eklenmeyenler:** Asya handikabında model ile piyasa farkından kâr çıkmadı (−%6 / −%9). Handikaplı çifte şans iddaa'da olmadığından Avrupa handikabı eklenmedi. İY maç sonucu çok az seçim üretiyor.
+
+## Canlı: gerçek gol eğrisi ve yeni pazarlar
+- **Gol zamanlaması:** Canlı model artık golleri dakikalara eşit dağıtmıyor; ESPN'deki 13.401 maçın (36.548 gol) gerçek dağılımını kullanıyor. Goller devre sonlarına doğru artıyor, %4'ü ilk yarı, %8'i maç sonu uzatmasında atılıyor. Eski model kalan golü düşük tahmin ediyordu: takım gol Alt seçimleri beklenenden 2 puan, İY 0,5 Alt 7 puan az tutuyordu; şimdi sapma 0–1 puan.
+- **Yeni canlı pazarlar:** İY sonucu, İY 0,5/1,5 Alt-Üst (yalnızca ilk yarıda), Ev/Dep gol Alt-Üst, sıradaki golü kim atar. İlk yarı seçimleri devre skoruyla (maç olaylarından) sonuçlandırılır.
+- **Düzeltmeler:** Çifte şans 12 olasılığı 2 puan düşük gösterilir (her iki dönemde de ~2 puan iyimserdi); KG Yok düzeltmesi gerçek eğriyle gereksiz kaldığı için kaldırıldı.
+- **Bildirim simülasyonu (2025-26, 4.642 maç, maç başına ilk bildirim):** eski sürüm %82,4, yeni sürüm %84,5 tuttu (beklenen %83,0). Test: `backtest/goal_events.py`, `backtest/live_goal_test.py`, `backtest/live_alert_sim.py`.
+
+## Birleşik bahisler (/mac ve /kupon)
+- `/mac takım`: MS & 2,5 Alt/Üst, MS & KG, çifte şans & 2,5 olasılıkları ve adil oranları.
+- `/kupon`: `galatasaray 1 2.5 üst 2.40`, `barcelona 1 kg 3.10`, `arsenal 1x 2.5 alt 2.05`, `lazio iy 1.5 alt 1.40` gibi satırlar.
+- Günlük seçim olarak verilmez: 8 sezonda %60+ olasılıklı birleşik seçim haftada birkaç tane ve Orta seviyesinde (%65) tutuyor. Test: `backtest/combo_test.py`.

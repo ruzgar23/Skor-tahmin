@@ -161,7 +161,9 @@ SEL = [
     (r"^kg(var)?$|^kgv$|^kg-?var$", "BTTS"), (r"^kg-?yok$|^kgy$", "NBTTS"),
     (r"^iy-?1$", "HT1"), (r"^iy-?x$|^iy-?0$", "HTX"), (r"^iy-?2$", "HT2"),
 ]
-OVER = re.compile(r"^(?:(?P<k>kart|korner)-?)?(?P<l>\d+[.,]5)?(?P<s>ü|u|üst|ust|alt|a)(?P<l2>\d+[.,]5)?$")
+OVER = re.compile(r"^(?:(?P<k>kart|korner|iy)-?)?(?P<l>\d+[.,]5)?(?P<s>ü|u|üst|ust|alt|a)(?P<l2>\d+[.,]5)?$")
+RES_ONLY = {"1", "X", "2", "1X", "X2", "12"}
+CONNECT = {"&", "+", "ve", "ile", "-", "/"}
 
 
 def parse_sel(tokens):
@@ -177,6 +179,8 @@ def parse_sel(tokens):
         if m:
             line = m.group("l") or m.group("l2")
             line = float(line.replace(",", ".")) if line else None
+            if line is not None and line >= 9.5 and not m.group("k"):
+                continue  # "1 2.5 üst" birleşince "12.5" olmasın: gol çizgisi bu kadar yüksek olmaz
             side = "O" if m.group("s") in ("ü", "u") else "U"
             return ((m.group("k") or "gol"), side, line), n
     return None, 0
@@ -193,6 +197,20 @@ def parse_line(raw):
     sel, n = parse_sel(toks)
     if not sel:
         return None
+    # birleşik bahis: "1 2.5 üst", "1 & üst", "x2 kg yok" → sonuç + (alt/üst ya da KG)
+    if sel[0] in ("gol", "BTTS", "NBTTS") and len(toks) > n:
+        rest = toks[:-n]
+        while rest and rest[-1].lower() in CONNECT:
+            rest = rest[:-1]
+        for k in (2, 1):
+            if len(rest) < k:
+                continue
+            rs, kk = parse_sel(rest[-k:])
+            if rs and kk == k and rs[0] in RES_ONLY and rs[1] is None:
+                tot = ("gol", sel[1], sel[2] or 2.5) if sel[0] == "gol" else sel[0]
+                if tot in core.COMBO_TOT and len(rest) > k:
+                    team = " ".join(rest[:-k]).strip()
+                    return dict(team=team, sel=("COMBO", rs[0], tot), odds=odds, raw=raw)
     team = " ".join(toks[:-n]).strip()
     return dict(team=team, sel=sel, odds=odds, raw=raw)
 
@@ -227,6 +245,15 @@ def sel_prob(m, kind, sel):
         po = float(1 - N.cdf(line, p["exp_total"], sd))
         return (po if side == "O" else 1 - po), f"{line_fmt(line)} {'Üst' if side == 'O' else 'Alt'}"
     p = m["p"]
+    if key == "COMBO":
+        res, tot = side, line
+        v = core.combo_prob(m, res, tot)
+        return (v, core.combo_label(res, tot)) if v is not None else (None, "bu maç için skor dağılımı yok")
+    if key == "iy":
+        line = line or 0.5
+        k = {0.5: "HTO05", 1.5: "HTO15"}.get(line)
+        if not k or k not in p: return None, "İY için 0,5 ve 1,5 çizgileri var"
+        return (p[k] if side == "O" else 1 - p[k]), f"İY {line_fmt(line)} {'Üst' if side == 'O' else 'Alt'}"
     if side is None:
         lbl = {"1": "MS 1", "X": "MS X", "2": "MS 2", "1X": "1X", "X2": "X2", "12": "12", "BTTS": "KG Var",
                "NBTTS": "KG Yok", "HT1": "İY 1", "HTX": "İY X", "HT2": "İY 2"}[key]
@@ -246,7 +273,8 @@ def sel_prob(m, kind, sel):
 
 COUPON_HELP = ("Kullanım (her satıra bir maç: takım, seçim, oran):\n<code>/kupon\ngalatasaray 1 1.85\narsenal 2.5 üst 1.70\nbarcelona kg 1.65\n"
                "fenerbahçe kart 4.5 üst 1.80\nlakers 2 1.95</code>\n\n"
-               "Seçimler: 1 · X · 2 · 1X · X2 · 12 · üst/alt (1.5, 2.5, 3.5) · kg · kgyok · iy1/iyx/iy2 · kart 4.5 üst · korner 9.5 alt. "
+               "Seçimler: 1 · X · 2 · 1X · X2 · 12 · üst/alt (1.5, 2.5, 3.5) · kg · kgyok · iy1/iyx/iy2 · iy 0.5 üst · kart 4.5 üst · korner 9.5 alt. "
+               "Birleşik: <code>galatasaray 1 2.5 üst 2.40</code> · <code>barcelona 1 kg 3.10</code> · <code>arsenal 1x 2.5 alt 2.05</code>. "
                "Basketbol: 1 · 2 · üst/alt 225.5")
 
 
@@ -375,9 +403,30 @@ def teyit_summary(picks, history, day):
 
 
 # ---------- canlı seçim karnesi ----------
-def live_settle(k, s0, s, final, corners=None):
+def live_settle(k, s0, s, final, corners=None, ht=None, first_half=False):
     """Canlı seçimin sonucu. s0: bildirim anındaki skor, s: şimdiki skor. final=False iken yalnızca kesinleşenler döner.
-    Korner seçimleri (CO/CU + çizgi) için corners: [ev, dep] güncel korner sayısı."""
+    Korner seçimleri (CO/CU + çizgi) için corners: [ev, dep] güncel korner sayısı.
+    İlk yarı seçimleri (IY...) için ht: devre skoru; first_half: maç hâlâ ilk yarıda mı."""
+    if k.startswith("IY"):
+        if ht is None:
+            if first_half and k[2:3] in ("O", "U") and s[0] + s[1] > float(k[3:]):
+                return k[2] == "O"   # ilk yarıda çizgi aşıldı
+            return None
+        a, b = ht
+        if k in ("IY1", "IYX", "IY2"):
+            return {"IY1": a > b, "IYX": a == b, "IY2": a < b}[k]
+        return (a + b > float(k[3:])) == (k[2] == "O")
+    if k[:2] in ("EO", "EU", "DO", "DU"):
+        g = s[0] if k[0] == "E" else s[1]; line = float(k[2:])
+        if g > line:
+            return k[1] == "O"
+        return (k[1] == "U") if final else None
+    if k in ("NEXT1", "NEXT2"):
+        dh, da = s[0] - s0[0], s[1] - s0[1]
+        if dh > 0 and da == 0: return k == "NEXT1"
+        if da > 0 and dh == 0: return k == "NEXT2"
+        if dh > 0 and da > 0: return "?"  # iki kontrol arasında iki takım da attı: sıra bilinmiyor
+        return False if final else None
     if k[:2] in ("CO", "CU"):
         if not corners:
             return None

@@ -137,6 +137,8 @@ def match_image(data, q):
         c = m["cards"]; lines.append(f"Kart ortalaması {c['mean']:.1f} · 4,5 üst %{round(c['over'].get('4.5', 0)*100)}".replace(".", ","))
         pk = extra.card_pick(m)
         if pk: lines[-1] += f" · öneri: {pk['label']} %{round(pk['prob']*100)}"
+    for h, r in core.combo_lines(m)[:2]:
+        lines.append(" · ".join(f"{lab} %{round(v * 100)}" for lab, v in sorted(r, key=lambda x: -x[1])[:3]))
     mv = m.get("move")
     if mv:
         big = [k for k, d in mv["d"].items() if abs(d) >= .03]
