@@ -102,7 +102,7 @@ def pre_lambdas(c, fd_lams):
     from scan import fit_to_market
     mk = E.fair({"1": eo["1"], "X": eo["X"], "2": eo["2"]}, "1X2")
     if eo.get("line") is not None and eo.get("over") and eo.get("under"):
-        po = (1 / eo["over"]) / (1 / eo["over"] + 1 / eo["under"])
+        po = E.fair({"O": eo["over"], "U": eo["under"]}, ("O", "U"))["O"]
         if abs(eo["line"] - 2.5) < 1e-6:
             mk["O25"] = po
         else:
