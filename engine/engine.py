@@ -208,7 +208,8 @@ def fair(o, keys):
     oransal yöntem %70+ favorilerin olasılığını 2-4 puan düşük gösteriyordu, power ile fark ~0-1,5 puan."""
     q = {k: 1 / o[k] for k in keys}
     lo, hi = 0.5, 3.0
-    if sum(v ** lo for v in q.values()) < 1 or sum(v ** hi for v in q.values()) > 1:
+    # Büro payı yoksa (toplam ≤ 1, bozuk ya da borsa oranı) power anlamsız: favoriyi küçültür.
+    if sum(q.values()) <= 1 or sum(v ** lo for v in q.values()) < 1 or sum(v ** hi for v in q.values()) > 1:
         s = sum(q.values())  # beklenmedik oranlar: oransal yönteme dön
         return {k: v / s for k, v in q.items()}
     for _ in range(60):  # ikiye bölme: toplam k'ya göre azalır

@@ -46,7 +46,8 @@ for meth in ("oransal", "power"):
     show(f"\nNBA · {meth}", T)
 
 # ---- NHL (iddaa: normal süre; bot nhl_probs + nhl_grade ile) ----
-nhl = [m for m in G if m["sp"] == "nhl"]
+# ESPN'in 2023-24 Unibet NHL oranları bozuk (toplam olasılık ~0,86 < 1); yalnızca DraftKings ve payı > 1 olanlar
+nhl = [m for m in G if m["sp"] == "nhl" and m.get("book") == "DraftKings" and 1 / m["mlh"] + 1 / m["mla"] > 1]
 print(f"\nNHL: oranlı {len(nhl)} maç, sezonlar {dict(collections.Counter(season(m['date']) for m in nhl))}")
 fam = collections.defaultdict(lambda: [0, 0])
 for meth in ("oransal", "power"):
