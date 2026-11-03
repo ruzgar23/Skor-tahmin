@@ -17,6 +17,8 @@ RHO = -0.06
 # KG Yok için eski -2 puan düzeltmesi düz dağılım içindi; gerçek eğriyle gerek kalmadı.
 KGY_FIX = 0.0
 D12_FIX = 0.02
+# 2Y sonucu: 2023-25'te kalibre, 2025-26'da ~3 puan iyimser; iki dönemin ortalaması kadar düşük gösterilir
+SH_FIX = 0.015
 
 # Canlı korner (backtest/live_corner_test.py, ESPN anlatımlarından 7.092 maç, 2023-25 öğrenme / 2025-26 test).
 # Kalan korner (her takım) = kalan_süre * [(1-w)*maç öncesi beklenti + w*maç içi tempo] * skor durumu * kırmızı kart;
@@ -95,9 +97,10 @@ def _pois(L, n=9):
     return np.exp(-L) * L ** i / np.array([math.factorial(k) for k in i])
 
 
-def extra_live(lh, la, hs, as_, minute, period, rh=0, ra=0):
+def extra_live(lh, la, hs, as_, minute, period, rh=0, ra=0, ht=None, halftime=False):
     """Ek canlı pazarlar: [(anahtar, etiket, olasılık)].
-    İlk yarı (yalnızca 1. yarıda): İY sonucu, İY 0,5/1,5 Alt-Üst. Takım golü: ev/dep bir sonraki iki çizgi. Sıradaki gol."""
+    İlk yarı (yalnızca 1. yarıda): İY sonucu, İY 0,5/1,5 Alt-Üst. İkinci yarı (devre arası ve 2. yarıda, devre skoru
+    biliniyorsa): 2Y sonucu, 2Y 0,5/1,5 Alt-Üst. Takım golü: ev/dep bir sonraki iki çizgi. Sıradaki gol."""
     mh = state_mult(hs - as_) * (RED_OWN ** rh) * (RED_OPP ** ra)
     ma = state_mult(as_ - hs) * (RED_OWN ** ra) * (RED_OPP ** rh)
     out = []
@@ -114,7 +117,20 @@ def extra_live(lh, la, hs, as_, minute, period, rh=0, ra=0):
     nog = float(ph[0] * pa[0])
     if Lh + La > 0:
         out += [("NEXT1", LABELS["NEXT1"], (1 - nog) * Lh / (Lh + La)), ("NEXT2", LABELS["NEXT2"], (1 - nog) * La / (Lh + La))]
-    if period == 1 and minute < 45:
+    if ht is not None and (period >= 2 or halftime):
+        # ikinci yarıda atılan goller + kalan sürede atılacaklar (kalan beklenti tüm maçınkiyle aynı: Lh, La)
+        sh, sa = hs - ht[0], as_ - ht[1]
+        if sh >= 0 and sa >= 0:
+            R = np.outer(ph, pa); R /= R.sum()
+            I, J = np.meshgrid(range(R.shape[0]), range(R.shape[0]), indexing="ij")
+            H, A = I + sh, J + sa
+            out += [("SH1", "2Y 1", float(R[H > A].sum()) - SH_FIX), ("SHX", "2Y X", float(R[H == A].sum()) - SH_FIX),
+                    ("SH2", "2Y 2", float(R[H < A].sum()) - SH_FIX)]
+            for line in (0.5, 1.5):
+                if sh + sa < line:
+                    po = float(R[H + A > line].sum())
+                    out += [(f"SHO{line}", f"2Y {str(line).replace('.', ',')} Üst", po), (f"SHU{line}", f"2Y {str(line).replace('.', ',')} Alt", 1 - po)]
+    if period == 1 and minute < 45 and not halftime:
         r1 = max(done_share(45, 1) - done_share(minute, 1), 0.0)
         R = np.outer(_pois(lh * r1 * mh), _pois(la * r1 * ma)); R /= R.sum()
         I, J = np.meshgrid(range(R.shape[0]), range(R.shape[0]), indexing="ij")
@@ -125,6 +141,16 @@ def extra_live(lh, la, hs, as_, minute, period, rh=0, ra=0):
                 po = float(R[H + A > line].sum())
                 out += [(f"IYO{line}", f"İY {str(line).replace('.', ',')} Üst", po), (f"IYU{line}", f"İY {str(line).replace('.', ',')} Alt", 1 - po)]
     return out
+
+
+def half_pick(ex):
+    """Devre arası bildirimi: ikinci yarı pazarlarından %70–88 arası en olası seçim (maç başına bir kez).
+    Testte (devre arası, her maç): 2025-26 %79,8 (beklenen %79,1), 2023-25 %79,7 (beklenen %78,9)."""
+    c = [(k, lab, pr) for k, lab, pr in (ex or []) if k.startswith("SH") and 0.70 <= pr <= 0.88]
+    if not c:
+        return []
+    k, lab, pr = max(c, key=lambda z: z[2])
+    return [dict(k=k, label=lab, prob=round(pr, 4), minOdds=round(1.05 / pr, 2), warn=None)]
 
 
 def ht_score(c):
@@ -368,6 +394,9 @@ def main(datapath, outpath, prevpath=None, logdir=None):
             if not lams:
                 continue
             rh, ra = team_reds(c)
+            is_ht = ev["status"]["type"]["name"] == "STATUS_HALFTIME"
+            ht = ht_score(c) if (period >= 2 or is_ht) else None
+            ex = extra_live(lams[0], lams[1], hs, as_, minute, period, rh, ra, ht, is_ht)
             p, tl, top, rest, rem = inplay(lams[0], lams[1], hs, as_, minute, period, rh, ra)
             mkt = live_market(c)
             cor = corners_of(c)
@@ -382,9 +411,8 @@ def main(datapath, outpath, prevpath=None, logdir=None):
                 score=[hs, as_], reds=[rh, ra], stats=[stats_of(sd["home"]), stats_of(sd["away"])],
                 pre=dict(lam=[round(lams[0], 3), round(lams[1], 3)], src=src, p=(hit[3] if hit else None)),
                 rest=rest, p={k: round(v, 4) for k, v in p.items()}, totals={k: round(v, 4) for k, v in tl.items()},
-                top=top, market=mkt, picks=picks_for(p, tl, minute, mkt, hs + as_,
-                                                     extra_live(lams[0], lams[1], hs, as_, minute, period, rh, ra)),
-                ht=ht_score(c) if (period >= 2 or ev["status"]["type"]["name"] == "STATUS_HALFTIME") else None,
+                top=top, market=mkt, picks=picks_for(p, tl, minute, mkt, hs + as_, ex),
+                ht=ht, hpicks=half_pick(ex) if is_ht else [],
                 corners=cor, cards=list(team_cards(c)), cpicks=[cpk] if cpk else [],
             ))
     out.sort(key=lambda m: (-len(m["picks"]), -m["minute"]))
@@ -398,7 +426,12 @@ def main(datapath, outpath, prevpath=None, logdir=None):
                 alerts.append((m, pk))
         if not m["consistent"] or m["lg"] not in TOP:
             continue
-        if any(k.startswith(m["id"] + "|") and not k.startswith(m["id"] + "|C") for k in notified):
+        # devre arası: ikinci yarı seçimi, maç başına bir kez (gol bildiriminden bağımsız)
+        for pk in m.get("hpicks") or []:
+            if not any(k.startswith(m["id"] + "|HT:") for k in notified):
+                notified[f"{m['id']}|HT:{pk['k']}"] = now.isoformat()
+                alerts.append((m, pk))
+        if any(k.startswith(m["id"] + "|") and not k.startswith((m["id"] + "|C", m["id"] + "|HT:")) for k in notified):
             continue  # aynı maç için bir kez bildir
         for pk in m["picks"]:
             if pk["warn"]:

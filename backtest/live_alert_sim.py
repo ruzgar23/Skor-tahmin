@@ -24,7 +24,8 @@ def sim(new):
             hs = sum(1 for mn, s in m["goals"] if mn <= t and s == "h"); as_ = sum(1 for mn, s in m["goals"] if mn <= t and s == "a")
             rh = sum(1 for mn, s in m["reds"] if mn <= t and s == "h"); ra = sum(1 for mn, s in m["reds"] if mn <= t and s == "a")
             p, tl, _, _, _ = L.inplay(lh, la, hs, as_, t, per, rh, ra)
-            ex = L.extra_live(lh, la, hs, as_, t, per, rh, ra) if new else None
+            htv = ht_of(m) if (per == 2 or t == 45) else None
+            ex = L.extra_live(lh, la, hs, as_, t, per, rh, ra, htv, t == 45) if new else None
             pk = L.picks_for(p, tl, t, None, hs + as_, ex)
             if not pk: continue
             pk = pk[0]; k = pk["k"]
@@ -34,7 +35,7 @@ def sim(new):
             else:
                 w = X.live_settle(k, [hs, as_], [m["hs"], m["as_"]], True, None, ht_of(m), False)
             if w not in (True, False): unres += 1; break
-            f = ("İY" if k.startswith("IY") else "Takım golü" if k[:2] in ("EO", "EU", "DO", "DU") else
+            f = ("İY" if k.startswith("IY") else "2. yarı" if k.startswith("SH") else "Takım golü" if k[:2] in ("EO", "EU", "DO", "DU") else
                  "Sıradaki gol" if k.startswith("NEXT") else "Alt/Üst" if k[0] in "OU" else pk["label"])
             for key in (f, "TOPLAM"):
                 c = fam[key]; c[0] += 1; c[1] += w; c[2] += pk["prob"]
