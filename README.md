@@ -142,3 +142,11 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
 ## Telegram menüsü
 - Giriş alanının altında sürekli duran butonlu menü: Günün seçimleri, Tüm maçlar, Güçlü, Orta, Riskli 1,75+, Çok riskli, Canlı maçlar, Karne, Basketbol, Hokey, Tenis, Kupon, Yardım. `/menu` ile tekrar gösterilir; mevcut abonelere bir kez gönderilir.
 - Yardım metni ve komut listesi kategorilere ayrıldı (Futbol, Yüksek oran, Canlı, Diğer sporlar, Takip, Ayarlar).
+
+## Bahis defteri (/oynadim, /defter)
+- `/oynadim galatasaray 1 1.85 100`: oynadığın bahsi (takım, seçim, oran, tutar) kaydeder; seçimler kupondakiyle aynı (birleşik, İY alt/üst ve korner dahil, kart hariç). Kayıt anında botun olasılığı ve oranın değeri gösterilir.
+- Maç bitince sonuç ESPN'den alınır (skor, devre skoru, korner) ve sahibine bildirilir. `/defter`: sonuçlanan bahisler, yatırılan/dönen, net kâr/zarar ve getiri, bekleyenler; `/defter sil 3` kayıt siler.
+- Kayıtlar abone dosyasıyla birlikte Actions önbelleğinde tutulur. Şimdilik yalnızca futbol.
+
+## Bildirim ayarları (/ayarlar)
+- Her abone, butonlarla hangi bölümlerin geleceğini seçer: günün seçimleri, sabah karnesi, tüm maçlar, riskli, çok riskli, maç önü teyit, oran düşüşü, canlı bildirimler, sonuç bildirimleri. Kapalı bölümler komutla yine istenebilir; kanallar (TELEGRAM_CHAT_ID) her zaman hepsini alır.

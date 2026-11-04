@@ -56,7 +56,7 @@ def send(chat_id, text, silent=False, reply_markup=None):
 
 
 def updates(offset, wait=0):
-    r = call("getUpdates", offset=offset, timeout=wait, allowed_updates=["message"])
+    r = call("getUpdates", offset=offset, timeout=wait, allowed_updates=["message", "callback_query"])
     return r.get("result", []) if r.get("ok") else []
 
 
