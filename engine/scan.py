@@ -114,7 +114,7 @@ def to_istanbul(d, t):
 
 # Avrupa kupaları için ülke gücü (log ölçekte, İngiltere = 0). Yaklaşık; UEFA ülke sıralamasından.
 COUNTRY_STR = {"ENG": 0.0, "ESP": -0.04, "ITA": -0.05, "GER": -0.06, "FRA": -0.14, "POR": -0.22,
-               "NED": -0.25, "TUR": -0.30, "GRE": -0.38, "SCO": -0.42}
+               "NED": -0.25, "TUR": -0.30, "GRE": -0.38, "SCO": -0.42, "BEL": -0.27, "NOR": -0.40, "SWE": -0.45}
 UNKNOWN_CUP = (-0.45, -0.45)  # veri setimizde olmayan ülkelerin kulüpleri
 
 

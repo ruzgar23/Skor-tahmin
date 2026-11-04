@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "engine"), os.path.join(ROOT, "bot")]
-import tg, core, extra, visual, ledger  # noqa: E402
+import tg, core, extra, visual, ledger, tools  # noqa: E402
 
 SITE = os.environ.get("SITE_DIR", os.path.join(ROOT, "site-out"))
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(ROOT, "state"))
@@ -210,6 +210,10 @@ def handle_commands(st, wait=0):
                 sub = st["subs"].setdefault(chat, {"on": True})
                 tg.send(chat, core.SETTINGS_TEXT + ("\n\n<i>Bildirimlerin şu an tamamen kapalı (/start ile aç).</i>" if not sub.get("on", True) else ""),
                         reply_markup=core.settings_kb(sub))
+            elif cmd == "/sistem":
+                tg.send(chat, tools.system_message(data, basket, arg))
+            elif cmd in ("/kuponyap", "/kupon_yap"):
+                tg.send(chat, tools.build_message(data, today, arg))
             elif cmd in ("/oynadim", "/oynadım"):
                 tg.send(chat, ledger.add(st, chat, data, basket, arg) if arg.strip() else ledger.HELP)
             elif cmd == "/defter":

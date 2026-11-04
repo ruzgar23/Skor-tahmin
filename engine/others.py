@@ -200,6 +200,24 @@ def load_elo():
     return Elo()
 
 
+# Set olasılıkları (üç setlik maçlar). Setler bağımsız değil: üçüncü sete gitme bağımsız hesabın C katı
+# (backtest/diger_sporlar/tennis_sets_test.py: C 2024'ten 0,80; 2025-26'da "2,5 Alt" %62,3 / beklenen %62,4).
+SET_C = 0.80
+SLAMS = re.compile(r"Australian Open|Roland Garros|French Open|Wimbledon|US Open", re.I)
+
+
+def set_probs(p):
+    """p: favorinin maç olasılığı → (iki sette biter, sürpriz set alır)."""
+    lo, hi = 0.0, 1.0
+    for _ in range(50):
+        mid = (lo + hi) / 2
+        if mid * mid * (3 - 2 * mid) < p: lo = mid
+        else: hi = mid
+    sp = (lo + hi) / 2
+    q = min(SET_C * 2 * sp * (1 - sp), 0.95)
+    return 1 - q, 1 - max(p - q * sp, 0.0)
+
+
 def tennis(now):
     elo = load_elo()
     last = date.fromisoformat(elo.last); today = now.date()
@@ -243,10 +261,14 @@ def tennis(now):
                 pick = None
                 if known and pr >= .70:
                     pick = dict(label=f"{fav} kazanır", winner=fav, prob=pr, tier=3 if pr >= .80 else 2, minOdds=1.03 / pr)
+                pp = {"1": pa, "2": 1 - pa}; sinfo = ""
+                if known and not (tr == "atp" and SLAMS.search(m["event"] or "")):  # beş setlik maçlarda yok
+                    u, ss = set_probs(pr); pp.update(SET2=u, UPSET=ss)
+                    sinfo = f" · iki sette biter %{round(u*100)} (en az {1.03 / u:.2f})".replace(".", ",") + f" · sürpriz set alır %{round(ss*100)}"
                 games.append(dict(id=f"T-{m['cid']}", sport="tenis", lg=tr.upper(), lgName=f"{tr.upper()} · {m['event']}", ko=m["ko"],
-                                  home=a, away=b, state="pre", p={"1": pa, "2": 1 - pa}, pick=pick, known=known,
+                                  home=a, away=b, state="pre", p=pp, pick=pick, known=known,
                                   info=f"{a} %{round(pa*100)} – {b} %{round((1-pa)*100)} · {dict(hard='sert', clay='toprak', grass='çim')[s]} kort"
-                                       + ("" if known else " · az maç verisi, öneri yok")))
+                                       + sinfo + ("" if known else " · az maç verisi, öneri yok")))
     return games, results
 
 

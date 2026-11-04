@@ -150,3 +150,19 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
 
 ## Bildirim ayarları (/ayarlar)
 - Her abone, butonlarla hangi bölümlerin geleceğini seçer: günün seçimleri, sabah karnesi, tüm maçlar, riskli, çok riskli, maç önü teyit, oran düşüşü, canlı bildirimler, sonuç bildirimleri. Kapalı bölümler komutla yine istenebilir; kanallar (TELEGRAM_CHAT_ID) her zaman hepsini alır.
+
+## Yeni ligler
+- Belçika Pro Lig (B1) ve football-data "new" formatındaki Norveç, İsveç, Finlandiya, Brezilya Serie A, MLS ve Japonya J1. Fikstür ve oranlar ESPN'den (DraftKings).
+- Test (`backtest/new_leagues_test.py`, 2019+): Güçlü 959 seçimde %75,7 (beklenen %75,4), Orta 4.661 seçimde %64,9 (beklenen %63,0); riskli ve çok riskli de kalibre. Danimarka beklenenin altında kaldığı için eklenmedi; Avusturya, İsviçre, Arjantin test verisi olmadığı için yok.
+- Bu liglerde devre skoru verisi yok: İY seçimleri (ek seçim, İY 1,5 Üst, İY/MS) verilmez. Canlı bildirim yok (test edilmedi).
+
+## Milli maçlar
+- UEFA Uluslar Ligi, hazırlık maçları, CONCACAF Uluslar Ligi ve EURO elemeleri kupa gibi işlenir; yalnızca piyasa oranı olan maçlarda ve yalnızca MS seçimleri. Test (2026, 435 maç): Güçlü %85,1 (beklenen %82,7), Orta %65,1 (beklenen %65,0); gol seçimleri az ve zayıf çıktığı için verilmez.
+
+## Tenis set olasılıkları
+- Üç setlik maçlarda "iki sette biter" ve "sürpriz set alır" olasılıkları. Setler bağımsız değil: üçüncü sete gitme bağımsız hesabın 0,80 katı (2024'ten öğrenildi). 2025-26'da "2,5 Alt" %62,3 tuttu (beklenen %62,4). Favori 2-0 tutarlı çıkmadığı için gösterilmez. Test: `backtest/diger_sporlar/tennis_sets_test.py`.
+
+## Kupon araçları ve maç yorumu
+- `/sistem 3/5` + maçlar: sistem kupon hesabı (kaç tutarsa ne kadar, kâr ihtimali, beklenen getiri); sistem yazılmazsa tüm sistemler karşılaştırılır.
+- `/kuponyap 3`: hedef toplam orana günün test edilmiş seçimlerinden en az maçla ulaşan kupon ve gerçek tutma ihtimali.
+- `/mac takım`: iki üç cümlelik maç önü yorum (favori, gol beklentisi, ilk yarı).

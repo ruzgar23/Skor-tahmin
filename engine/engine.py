@@ -16,15 +16,20 @@ BASE = "https://football-data.co.uk"
 COUNTRIES = {
     "ENG": ["E0", "E1", "E2", "E3"], "ESP": ["SP1", "SP2"], "ITA": ["I1", "I2"],
     "GER": ["D1", "D2"], "FRA": ["F1", "F2"], "TUR": ["T1"], "NED": ["N1"],
-    "POR": ["P1"], "SCO": ["SC0", "SC1", "SC2", "SC3"], "GRE": ["G1"],
+    "POR": ["P1"], "SCO": ["SC0", "SC1", "SC2", "SC3"], "GRE": ["G1"], "BEL": ["B1"],
+    # football-data "new" formatındaki ligler (tek dosya, yalnızca 1X2 kapanış oranı): backtest/new_leagues_test.py
+    "NOR": ["NOR"], "SWE": ["SWE"], "FIN": ["FIN"], "BRA": ["BRA"], "USA": ["USA"], "JPN": ["JPN"],
 }
+NEW_FORMAT = {"NOR", "SWE", "FIN", "BRA", "USA", "JPN"}  # Danimarka testte beklenenin altında kaldığı için yok
 LEAGUE_NAMES = {
     "E0": "Premier League", "E1": "Championship", "E2": "League One", "E3": "League Two",
     "SP1": "La Liga", "SP2": "La Liga 2", "I1": "Serie A", "I2": "Serie B",
     "D1": "Bundesliga", "D2": "2. Bundesliga", "F1": "Ligue 1", "F2": "Ligue 2",
     "T1": "Süper Lig", "N1": "Eredivisie", "P1": "Primeira Liga",
     "SC0": "İskoçya Premiership", "SC1": "İskoçya Championship", "SC2": "İskoçya League One",
-    "SC3": "İskoçya League Two", "G1": "Yunanistan Süper Lig",
+    "SC3": "İskoçya League Two", "G1": "Yunanistan Süper Lig", "B1": "Belçika Pro Lig",
+    "NOR": "Norveç Eliteserien", "SWE": "İsveç Allsvenskan", "FIN": "Finlandiya Veikkausliiga", "BRA": "Brezilya Serie A",
+    "USA": "MLS", "JPN": "Japonya J1 Ligi",
 }
 LEAGUE_COUNTRY = {l: c for c, ls in COUNTRIES.items() for l in ls}
 SEASONS = ["2324", "2425", "2526", "2627"]
@@ -50,9 +55,17 @@ def pdate(s):
 def download(dirpath):
     os.makedirs(dirpath, exist_ok=True)
     got = []
+    for code in NEW_FORMAT:  # tek dosyada tüm sezonlar; her seferinde tazelenir
+        p = os.path.join(dirpath, f"new-{code}.csv")
+        try:
+            urllib.request.urlretrieve(f"{BASE}/new/{code}.csv", p); got.append(p)
+        except Exception as e:
+            print("indirilemedi", code, e)
     for s in SEASONS:
         for ls in COUNTRIES.values():
             for l in ls:
+                if l in NEW_FORMAT:
+                    continue
                 p = os.path.join(dirpath, f"{s}-{l}.csv")
                 # geçmiş sezonları bir kez indir; bu sezonu her seferinde tazele
                 if os.path.exists(p) and s != SEASONS[-1]:
@@ -97,8 +110,36 @@ def load_matches(dirpath):
                 hxg=fnum(r.get("HxG")), axg=fnum(r.get("AxG")),
                 odds=odds(r, "Avg"), codds=odds(r, "AvgC"),
             ))
+    for path in sorted(glob.glob(os.path.join(dirpath, "new-*.csv"))):
+        code = os.path.basename(path)[4:-4]
+        if code not in NEW_FORMAT:
+            continue
+        for r in read_rows(path):
+            season = new_season(r.get("Season", ""))
+            if not season or season < "2223" or not r.get("HG") or not r.get("Home"):
+                continue
+            d = pdate(r.get("Date", ""))
+            if not d:
+                continue
+            try:
+                hg, ag = int(float(r["HG"])), int(float(r["AG"]))
+            except ValueError:
+                continue
+            o = odds(r, "AvgC")
+            out.append(dict(lg=code, season=season, date=d, home=r["Home"].strip(), away=r["Away"].strip(), hg=hg, ag=ag,
+                            hthg=None, htag=None, hxg=None, axg=None, odds=o, codds=o))
     out.sort(key=lambda m: m["date"])
     return out
+
+
+def new_season(s):
+    """'2026' → '2627', '2025/2026' → '2526' (ana liglerle aynı sezon kodu: son sezon SEASONS[-1])."""
+    s = (s or "").strip()
+    try:
+        y = int(s[:4])
+    except ValueError:
+        return None
+    return f"{y % 100:02d}{(y + 1) % 100:02d}"
 
 
 class CountryModel:

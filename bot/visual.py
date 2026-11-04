@@ -158,7 +158,8 @@ def match_image(data, q):
     g = core.grade(m)
     if g:
         g = dict(g); g["label"] = g["label"].upper()
-    lines = []
+    import tools
+    lines = [tools.comment(m)]
     if m.get("cards"):
         c = m["cards"]; lines.append(f"Kart ortalaması {c['mean']:.1f} · 4,5 üst %{round(c['over'].get('4.5', 0)*100)}".replace(".", ","))
         pk = extra.card_pick(m)

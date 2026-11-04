@@ -182,7 +182,12 @@ def match_card(m, g, extra_lines):
         d.text((cx + 104, y + 78), f"%{round(v * 100)}", font=F(20), fill=MUTED)
         cx += 186
     y += 170
-    for ln in extra_lines[:3]:
-        d.text((48, y), _fit(d, ln, F(22), W - 96), font=F(22), fill=INK); y += 36
+    shown = 0
+    for ln in extra_lines[:4]:  # uzun satırlar (maç yorumu) alt satıra geçer; en fazla 7 satır
+        for part in _wrap(d, ln, F(24), W - 96):
+            if shown >= 7:
+                break
+            d.text((48, y), part, font=F(24), fill=INK); y += 36; shown += 1
+        y += 8
     y = _footer(d, y + 14, "Olasılıklar garanti değildir. Kaybetmeyi göze alamayacağın parayla oynama.")
     return _png(img.crop((0, 0, W, y + 30)))

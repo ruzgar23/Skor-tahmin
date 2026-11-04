@@ -22,8 +22,10 @@ TR = {"Besiktas": "Beşiktaş", "Fenerbahce": "Fenerbahçe", "Goztep": "Göztepe
       "Corum": "Çorum", "Eyupspor": "Eyüpspor", "Genclerbirligi": "Gençlerbirliği", "Kasimpasa": "Kasımpaşa",
       "Karagumruk": "Karagümrük", "Ankaragucu": "Ankaragücü", "Istanbulspor": "İstanbulspor",
       "Gaziantep": "Gaziantep FK", "Ad. Demirspor": "Adana Demirspor"}
-TIER_LG = {"UCL": 0, "UEL": 0, "UECL": 0, "E0": 1, "SP1": 1, "I1": 1, "D1": 1, "F1": 1, "T1": 1, "N1": 1, "P1": 1,
-           "SC0": 1, "G1": 1, "E1": 2, "SP2": 2, "I2": 2, "D2": 2, "F2": 2, "SC1": 2, "E2": 3, "E3": 3, "SC2": 3, "SC3": 3}
+NATIONAL_LG = {"NATNL", "NATFR", "NATCN", "NATEQ"}
+TIER_LG = {"UCL": 0, "UEL": 0, "UECL": 0, "NATNL": 0, "NATEQ": 0, "NATCN": 1, "NATFR": 1, "E0": 1, "SP1": 1, "I1": 1, "D1": 1, "F1": 1, "T1": 1, "N1": 1, "P1": 1,
+           "SC0": 1, "G1": 1, "B1": 1, "E1": 2, "SP2": 2, "I2": 2, "D2": 2, "F2": 2, "SC1": 2, "E2": 3, "E3": 3, "SC2": 3, "SC3": 3,
+           "BRA": 2, "USA": 2, "NOR": 2, "SWE": 2, "JPN": 2, "FIN": 3}
 TIERNAME = {3: "Güçlü", 2: "Orta", 1: "Düşük güven"}
 HIT = {("MS", 3): .80, ("MS", 2): .67, ("O25", 2): .65, ("U25", 2): .63, ("KGV", 2): .64}
 UNIT = {3: "1 birim", 2: "½ birim", 4: "½ birim", 5: "¼ birim", 6: "⅛ birim"}
@@ -65,6 +67,8 @@ def grade(m):
     if 1 - p["O25"] >= .60: c.append(("U25", "2,5 Alt", 1 - p["O25"], 2))
     if p["BTTS"] >= .60: c.append(("KGV", "KG Var", p["BTTS"], 2))
     if 1 - p["BTTS"] >= .60: c.append(("KGY", "KG Yok", 1 - p["BTTS"], 1))
+    if m.get("lg") in NATIONAL_LG:  # milli maçlarda yalnızca MS (gol seçimleri testte zayıf ve az)
+        c = [x for x in c if x[0] == "MS"]
     if not c:
         return None
     c.sort(key=lambda t: (-t[3], -t[2]))
@@ -79,6 +83,7 @@ def grade(m):
 
 # Ek seçimler (ilk yarı ve takım gol alt/üst): maç başına en fazla bir tane, olasılık %70–80.
 # backtest/new_markets_test.py: 24.863 seçimde %76,9 tuttu (beklenen %76,0), 7 sezonun hepsinde %76–78.
+NO_HT_LEAGUES = {"NOR", "SWE", "FIN", "BRA", "USA", "JPN"}
 # Takım golü (Ev/Dep gol) seçimleri kullanıcı isteğiyle kaldırıldı (4 Kasım 2026); yalnızca ilk yarı.
 EXTRA = (("HTO05", "İY 0,5 Üst", False), ("HTO15", "İY 1,5 Alt", True))
 EXTRA_KEY = {lab: (k, under) for k, lab, under in EXTRA}
@@ -88,6 +93,8 @@ def extra_pick(m):
     """Maçın ek seçimi (yalnızca piyasa oranlı maçlarda) ya da None."""
     p = m.get("p") or {}
     if m.get("src") != "piyasa" or not all(m.get("known") or [False]):
+        return None
+    if m.get("lg") in NO_HT_LEAGUES:  # devre skoru verisi yok: ilk yarı seçimleri test edilemedi
         return None
     if m.get("cup"):
         # Avrupa kupalarında güçlü-zayıf farkı büyük, farklı skorlar modelin beklediğinden sık (3+ fark: model %22, gerçek %25);
@@ -175,6 +182,8 @@ def risky_pick(m):
         return None
     c = []
     for k, lab in RISKY_SIMPLE:
+        if k.startswith("HT") and m.get("lg") in NO_HT_LEAGUES:
+            continue
         v = (1 - p["O25"]) if k == "U25" else (1 - p["O35"]) if k == "U35" else p.get(k)
         if v is not None:
             c.append((k, lab, v))
@@ -266,7 +275,8 @@ def long_pick(m, band):
     if m.get("src") != "piyasa" or not all(m.get("known") or [False]):
         return None
     _, lo, hi = band
-    c = [x for x in long_cands(m) if lo <= x[2] <= hi]
+    c = [x for x in long_cands(m) if lo <= x[2] <= hi
+         and not (m.get("lg") in NO_HT_LEAGUES and x[0].startswith(("IY", "HF")))]
     if not c:
         return None
     k, lab, v = max(c, key=lambda x: x[2])
@@ -440,8 +450,10 @@ def match_message(data, q):
         return f"“{e(q)}” için yaklaşan maç bulunamadı."
     m = sorted(hits, key=lambda m: m["ko"])[0]; p = m["p"]; g = grade(m)
     tops = ", ".join(f"{a}-{b} {pct(v)}" for a, b, v in m["top"][:4])
+    import tools
     lines = [f"⚽ <b>{e(nm(m['home']))} – {e(nm(m['away']))}</b>",
              f"{e(m['lgName'])} · {ko_local(m).strftime('%d.%m %H:%M')}", "",
+             f"💬 <i>{e(tools.comment(m))}</i>", "",
              f"MS: 1 {pct(p['1'])} · X {pct(p['X'])} · 2 {pct(p['2'])}",
              f"Çifte şans: 1X {pct(p['1X'])} · 12 {pct(p['12'])} · X2 {pct(p['X2'])}",
              f"Alt/Üst: 1,5Ü {pct(p['O15'])} · 2,5Ü {pct(p['O25'])} · 3,5Ü {pct(p['O35'])}",
@@ -564,6 +576,7 @@ HELP = ("<b>⚽ Skor Tahmin Botu</b>\n"
         "<b>🔴 Canlı</b>\n/canli – şu an oynanan maçlar\n\n"
         "<b>🏀 Diğer sporlar</b>\n/basket · /hokey · /tenis\n\n"
         "<b>📊 Takip</b>\n/karne – dünün sonuçları\n/kupon – kuponunu değerlendir (her satıra: takım seçim oran)\n\n"
+        "<b>🧮 Kupon araçları</b>\n/sistem 3/5 + maçlar – sistem kupon hesabı\n/kuponyap 3 – hedef orana göre kupon önerisi\n\n"
         "<b>📒 Bahis defteri</b>\n/oynadim galatasaray 1 1.85 100 – oynadığın bahsi kaydet\n/defter – kâr/zarar özetin\n\n"
         "<b>⚙️ Ayarlar</b>\n/ayarlar – hangi bildirimler gelsin · /menu – menüyü göster\n/nasil – nasıl oynanır · /dur – bildirimleri kapat · /start – tekrar aç\n\n"
         "<i>Olasılıklar garanti değildir. Kaybetmeyi göze alamayacağın parayla oynama.</i>")
@@ -572,7 +585,8 @@ COMMANDS = [("secimler", "⚽ Günün seçimleri"), ("bugun", "📋 Bugünün t�
             ("riskli", "🎲 Riskli seçimler (oran 1,75+)"), ("cokriskli", "🔥 Çok riskli (oran 3,2+ ve 5,4+)"),
             ("canli", "🔴 Şu an oynanan maçlar"), ("mac", "🔎 Tek maç: /mac takım"),
             ("basket", "🏀 Basketbol"), ("hokey", "🏒 Hokey (NHL)"), ("tenis", "🎾 Tenis"),
-            ("karne", "📊 Dünün sonuçları"), ("kupon", "🧾 Kupon değerlendir"),
+            ("karne", "📊 Dünün sonuçları"), ("kupon", "🧾 Kupon değerlendir"), ("sistem", "🧮 Sistem kupon hesabı"),
+            ("kuponyap", "🧩 Hedef orana göre kupon"),
             ("oynadim", "📒 Bahsini deftere yaz"), ("defter", "📒 Defterim: kâr/zarar"), ("ayarlar", "⚙️ Bildirim ayarları"),
             ("menu", "📂 Menüyü göster"), ("nasil", "❓ Nasıl oynanır"), ("dur", "🔕 Bildirimleri kapat"), ("yardim", "ℹ️ Yardım")]
 
@@ -582,18 +596,21 @@ MENU_ROWS = [["⚽ Günün seçimleri", "📋 Tüm maçlar"],
              ["🎲 Riskli 1,75+", "🔥 Çok riskli"],
              ["🔴 Canlı maçlar", "📊 Karne"],
              ["🏀 Basketbol", "🏒 Hokey", "🎾 Tenis"],
-             ["📒 Defterim", "⚙️ Ayarlar"],
-             ["🧾 Kupon", "ℹ️ Yardım"]]
+             ["🧾 Kupon", "🧮 Sistem", "🧩 Kupon yap"],
+             ["📒 Defterim", "⚙️ Ayarlar", "ℹ️ Yardım"]]
 MENU_CMD = {"⚽ Günün seçimleri": "/secimler", "📋 Tüm maçlar": "/bugun", "🟢 Güçlü": "/guclu", "🟡 Orta": "/orta",
             "🎲 Riskli 1,75+": "/riskli", "🔥 Çok riskli": "/cokriskli", "🔴 Canlı maçlar": "/canli", "📊 Karne": "/karne",
             "🏀 Basketbol": "/basket", "🏒 Hokey": "/hokey", "🎾 Tenis": "/tenis", "🧾 Kupon": "/kupon", "ℹ️ Yardım": "/yardim",
-            "📒 Defterim": "/defter", "⚙️ Ayarlar": "/ayarlar"}
+            "📒 Defterim": "/defter", "⚙️ Ayarlar": "/ayarlar",
+            "🧮 Sistem": "/sistem", "🧩 Kupon yap": "/kuponyap"}
 MENU_KB = {"keyboard": [[{"text": t} for t in row] for row in MENU_ROWS], "resize_keyboard": True, "is_persistent": True,
            "input_field_placeholder": "Bir bölüm seç ya da /mac takım yaz"}
-MENU_VERSION = 2
+MENU_VERSION = 3
 MENU_NEWS = {1: "Bölümler artık alttaki butonlarda: günün seçimleri, güçlü/orta, riskli, çok riskli, canlı, diğer sporlar ve karne.",
              2: "Menüye <b>📒 Defterim</b> (oynadığın bahislerin kâr/zararı, /oynadim ile kayıt) ve <b>⚙️ Ayarlar</b> "
-                "(hangi bildirimlerin geleceğini seç) eklendi."}
+                "(hangi bildirimlerin geleceğini seç) eklendi.",
+             3: "Yeni: <b>🧮 Sistem</b> (sistem kupon hesabı), <b>🧩 Kupon yap</b> (hedef orana göre kupon), maç ayrıntısında kısa yorum, "
+                "yeni ligler (Belçika, Norveç, İsveç, Brezilya, MLS, Japonya), milli maçlar ve tenis set olasılıkları."}
 
 # Bildirim ayarları: abone bazında kapatılabilen yayın bölümleri (komutla istenince her zaman gelir)
 SETTINGS = [("secimler", "⚽ Günün seçimleri"), ("karne", "📊 Sabah karnesi"), ("tummaclar", "📋 Tüm maçlar listesi"),
