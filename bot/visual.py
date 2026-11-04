@@ -92,6 +92,18 @@ def daily_images(data, basket, day, per_page=8):
     return out
 
 
+def risky_images(data, day):
+    """Riskli seçimler kartı (oran 1,75+): en fazla 8 seçim, kendi renginde."""
+    rows = core.risky_list(core.day_matches(data, day))
+    if not rows:
+        return []
+    items = [_row(m, g["label"], g["prob"], g["minOdds"], 5) for m, g in sorted(rows, key=lambda x: x[0]["ko"])]
+    accent, _ = cards.SPORT["riskli"]
+    return [cards.daily_card("RİSKLİ SEÇİMLER · ORAN 1,75+", f"{tr_date(day)} · {len(items)} seçim", [("Tutma olasılığı %50–57", items)],
+                             ("10 seçimin ortalama 5–6'sı tutar; arka arkaya kayıplar normaldir. Kombine yapma, en fazla ¼ birim oyna.",
+                              "iddaa oranı kartta yazan sınırın altındaysa oynama: piyasa ortalaması oranla bu seçimler %5 kaybettirdi."), accent)]
+
+
 def how_to():
     return ("<b>Nasıl kullanılır?</b>\n"
             "1️⃣ Karttaki maçı iddaa'da bul, <b>OYNA</b> yazan seçime bak.\n"
@@ -229,7 +241,7 @@ def report_images(history, day, picks=None, live_bets=None, opicks=None, basket=
     lv = extra.live_day(live_bets, day)
     orow = extra.other_day_results(opicks, basket, day)
     xr = core.extra_results(history, day)
-    if not rows and not lv and not orow and not xr:
+    if not rows and not lv and not orow and not xr and not core.risky_results(history, day):
         return []
     k = []
     for tier, name in ((3, "güçlü"), (2, "orta")):
@@ -245,6 +257,10 @@ def report_images(history, day, picks=None, live_bets=None, opicks=None, basket=
     if xr:
         xw = sum(1 for _, _, ok in xr if ok)
         k.append((f"{xw}/{len(xr)}", f"ek seçim tuttu (%{round(100 * xw / len(xr))})", PG.GREEN if xw / len(xr) >= .7 else PG.AMBER))
+    rr = core.risky_results(history, day)
+    if rr:
+        rw = sum(1 for _, _, ok in rr if ok)
+        k.append((f"{rw}/{len(rr)}", f"riskli seçim tuttu (%{round(100 * rw / len(rr))})", PG.GREEN if rw / len(rr) >= .55 else PG.AMBER))
     if lv:
         lw = sum(1 for b in lv if b["ok"])
         k.append((f"{lw}/{len(lv)}", f"canlı seçim tuttu (%{round(100 * lw / len(lv))})", PG.GREEN if lw / len(lv) >= .7 else PG.AMBER))
@@ -260,6 +276,10 @@ def report_images(history, day, picks=None, live_bets=None, opicks=None, basket=
         for h, g, ok in xr:
             hh = dict(h, lgName=h["lgName"] + (f" · İY {h['ht'][0]}-{h['ht'][1]}" if g["label"].startswith("İY") and h.get("ht") else ""))
             blocks.append(PG.result_row(hh, g, ok, nm))
+    if rr:
+        blocks.append(("head", "Riskli seçimler (oran 1,75+)"))
+        for h, g, ok in rr:
+            blocks.append(PG.result_row(h, g, ok, nm))
     if lv:
         blocks.append(("head", "Canlı seçimler"))
         for b in lv:

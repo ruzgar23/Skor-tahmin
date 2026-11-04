@@ -125,7 +125,7 @@ HIST_P = ("1", "X", "2", "1X", "12", "X2", "O15", "O25", "O35", "BTTS", "HT1", "
 def slim(m):
     return dict(id=m["id"], lg=m["lg"], lgName=m["lgName"], ko=m["ko"], home=m["home"], away=m["away"],
                 cup=m.get("cup", False), src=m["src"], book=m.get("book"), known=m["known"],
-                p={k: m["p"][k] for k in HIST_P if k in m["p"]}, top=m["top"][0])
+                p={k: m["p"][k] for k in HIST_P if k in m["p"]}, top=m["top"][0], M=m.get("M"))
 
 
 def update_history(hist, snapshots, results_pool, now, force=False):
