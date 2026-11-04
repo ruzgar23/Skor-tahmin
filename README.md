@@ -125,3 +125,8 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
 ## Kupalarda ek seçim yok
 - Avrupa kupalarında (ŞL, AL, KL) ek seçimler (İY, takım golü) verilmez. 2026'daki 351 kupa maçında (ESPN, DraftKings oranları) ek seçimler %72,6 tuttu, beklenen %76,3'tü. Sebep: kupalarda güçlü-zayıf farkı büyük, maçların %25'i 3+ farkla bitiyor (liglerde %15) ve model bunu ~3 puan az tahmin ediyor; özellikle favorinin "gol Alt" seçimleri tutmuyor.
 - Kupalarda ana seçimler etkilenmiyor: Güçlü %82,9 (beklenen %80,0), Orta %65,7 (beklenen %65,3). Test: `backtest/cup_events.py`, `backtest/cup_test.py`.
+
+## Riskli seçimler (/riskli, oran 1,75+)
+- Adil oranı 1,75–2,00 (tutma olasılığı %50–57) olan bahislerden maç başına en olası tek seçim, günde en çok 8 tane: MS 1/2, 2,5 Alt/Üst, 3,5 Alt, KG Var, Ev/Dep gol 1,5 Üst, İY 1,5 Üst ve birleşikler (MS 1/MS 2/12/X2 & 2,5 Üst). Testte kalibre çıkmayan KG Yok, 1X & 2,5 Üst ve MS & KG Yok listede yok.
+- Her sabah ayrı kart olarak gönderilir, `/riskli` ile istenir, karnede ayrı sayılır. Birim: ¼.
+- Test (`backtest/risky_test.py`): lig maçlarında 24.840 seçimin %55,2'si tuttu (beklenen %54,6; 8 sezonun hepsinde %54–57,5); kupalarda 311 seçimin %59,8'i (beklenen %54,5). Piyasa ortalaması oranla oynandığında getiri −%4,7: kâr ancak iddaa oranı kartta yazan sınırın üstündeyse mümkün.

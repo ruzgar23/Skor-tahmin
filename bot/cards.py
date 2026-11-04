@@ -19,7 +19,8 @@ BG = (238, 241, 243); PANEL = (255, 255, 255); INK = (21, 33, 43); MUTED = (93, 
 GREEN = (29, 107, 71); GREEN_SOFT = (220, 239, 228); AMBER = (163, 93, 0); AMBER_SOFT = (251, 238, 216)
 RED = (163, 64, 44); BLUE = (47, 93, 138); GREY = (138, 150, 160); HEAD = (21, 33, 43)
 BLUE_SOFT = (222, 233, 244)
-TIER = {3: (GREEN, GREEN_SOFT, "GÜÇLÜ", "★★★"), 2: (AMBER, AMBER_SOFT, "ORTA", "★★☆"), 4: (BLUE, BLUE_SOFT, "EK SEÇİM", "")}
+TIER = {3: (GREEN, GREEN_SOFT, "GÜÇLÜ", "★★★"), 2: (AMBER, AMBER_SOFT, "ORTA", "★★☆"), 4: (BLUE, BLUE_SOFT, "EK SEÇİM", ""),
+        5: ((176, 42, 92), (248, 222, 232), "RİSKLİ", "")}
 W = 1080
 
 
@@ -47,7 +48,7 @@ def _bar(d, x, y, w, h, p, color):
 
 # Spor başına başlık rengi: her spor ayrı görselde, rengiyle ayırt edilir
 SPORT = {"futbol": ((21, 33, 43), "FUTBOL"), "basketbol": ((190, 84, 20), "BASKETBOL"),
-         "hokey": ((24, 96, 150), "HOKEY"), "tenis": ((104, 58, 150), "TENİS")}
+         "hokey": ((24, 96, 150), "HOKEY"), "tenis": ((104, 58, 150), "TENİS"), "riskli": ((120, 24, 60), "RİSKLİ")}
 
 
 def _header(d, title, sub, fill=HEAD):
@@ -96,7 +97,7 @@ def daily_card(title, sub, sections, footer, accent=HEAD):
             d.rectangle((36, y + 14, 48, y + CH - 14), fill=col)
             x0, xr = 76, W - 76
             # 1: saat · lig  |  güven · birim
-            conf = tname + {3: " · 1 birim", 2: " · ½ birim", 4: " · ½ birim"}.get(it["tier"], "")
+            conf = tname + {3: " · 1 birim", 2: " · ½ birim", 4: " · ½ birim", 5: " · ¼ birim"}.get(it["tier"], "")
             cw = d.textlength(conf, font=F(26, True))
             d.text((xr - cw, y + 22), conf, font=F(26, True), fill=col)
             d.text((x0, y + 22), _fit(d, f"{it['time']} · {it['league']}", F(26), xr - cw - x0 - 24), font=F(26), fill=MUTED)

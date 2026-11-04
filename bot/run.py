@@ -186,6 +186,8 @@ def handle_commands(st, wait=0):
             elif cmd == "/orta":
                 reply(chat, imgs_or(visual.daily_images, {"matches": [m for m in data["matches"] if (core.grade(m) or {}).get("tier") == 2]}, {}, today),
                       core.tier_list_message(data, today, 2))
+            elif cmd == "/riskli":
+                reply(chat, imgs_or(visual.risky_images, data, today), core.risky_message(data, today))
             elif cmd == "/canli":
                 lv = jload("live.json")
                 imgs = imgs_or(visual.live_list_images, lv)
@@ -254,6 +256,8 @@ def daily_body(st):
         data = jload("data.json"); basket = bk()
         broadcast_rich(st, imgs_or(visual.daily_images, data, basket, today),
                        visual.daily_text(data, basket, today) + core.FOOTER, caption=visual.how_to())
+        if core.risky_list(core.day_matches(data, today)):  # riskli seçim yoksa mesaj gönderme
+            broadcast_rich(st, imgs_or(visual.risky_images, data, today), core.risky_message(data, today), silent=True)
         broadcast_rich(st, imgs_or(visual.all_matches_images, data, basket, today), "",
                        caption="Bugünün tüm maçları (futbol, basketbol, hokey, tenis). Ayrıntı için /mac takım", silent=True)
         st["sent"]["daily"] = str(today)
