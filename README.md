@@ -166,3 +166,6 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
 - `/sistem 3/5` + maçlar: sistem kupon hesabı (kaç tutarsa ne kadar, kâr ihtimali, beklenen getiri); sistem yazılmazsa tüm sistemler karşılaştırılır.
 - `/kuponyap 3`: hedef toplam orana günün test edilmiş seçimlerinden en az maçla ulaşan kupon ve gerçek tutma ihtimali.
 - `/mac takım`: iki üç cümlelik maç önü yorum (favori, gol beklentisi, ilk yarı).
+
+## Canlı: League One ve League Two
+- Canlı gol ve devre arası bildirimleri League One ve League Two'ya da açıldı. 2025-26 simülasyonu (ESPN gol dakikaları, maç başına ilk bildirim): League One %83,1 (beklenen %82,1), League Two %82,5 (beklenen %81,8). Aynı testte diğer alt ligler: La Liga 2 %82,5, Serie B %85,3, 2. Bundesliga %81,3, Ligue 2 %79,9; devre arası bildirimi %79,2 (beklenen %77,7). İskoçya alt liglerinde test verisi yok, canlı bildirim yok.
