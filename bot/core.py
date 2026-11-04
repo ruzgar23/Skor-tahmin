@@ -91,6 +91,10 @@ def extra_pick(m):
     p = m.get("p") or {}
     if m.get("src") != "piyasa" or not all(m.get("known") or [False]):
         return None
+    if m.get("cup"):
+        # Avrupa kupalarında güçlü-zayıf farkı büyük, farklı skorlar modelin beklediğinden sık (3+ fark: model %22, gerçek %25);
+        # ek seçimler kupalarda %72,6 tuttu (beklenen %76,3; backtest/cup_test.py, 2026, 351 maç). Ana seçimler etkilenmiyor.
+        return None
     best = None
     for k, lab, under in EXTRA:
         if k not in p:

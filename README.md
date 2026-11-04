@@ -121,3 +121,7 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
 - **Yeni canlı pazarlar:** 2Y sonucu (1/X/2) ve 2Y 0,5/1,5 Alt-Üst; devre arasında ve ikinci yarıda, devre skoru (maç olaylarından) biliniyorsa. Sonuç, devreden sonraki gollerle belirlenir.
 - **Devre arası bildirimi:** Her maç için devre arasında bir kez, ikinci yarı pazarlarından %70–88 arası en olası seçim (gol ve korner bildirimlerinden ayrı). Testte 2025-26'da %79,8 (beklenen %79,1), 2023-25'te %79,7 (beklenen %78,9) tuttu; çoğu "2Y 0,5 Üst".
 - 2Y sonucu 2023-25'te kalibre, 2025-26'da ~3 puan iyimserdi; iki dönemin ortalaması kadar (1,5 puan) düşük gösterilir. 2Y 0,5 Üst %77,9 (beklenen %77,2), 2Y 1,5 Alt %78,8 (beklenen %78,3).
+
+## Kupalarda ek seçim yok
+- Avrupa kupalarında (ŞL, AL, KL) ek seçimler (İY, takım golü) verilmez. 2026'daki 351 kupa maçında (ESPN, DraftKings oranları) ek seçimler %72,6 tuttu, beklenen %76,3'tü. Sebep: kupalarda güçlü-zayıf farkı büyük, maçların %25'i 3+ farkla bitiyor (liglerde %15) ve model bunu ~3 puan az tahmin ediyor; özellikle favorinin "gol Alt" seçimleri tutmuyor.
+- Kupalarda ana seçimler etkilenmiyor: Güçlü %82,9 (beklenen %80,0), Orta %65,7 (beklenen %65,3). Test: `backtest/cup_events.py`, `backtest/cup_test.py`.
