@@ -161,14 +161,18 @@ def handle_commands(st, wait=0):
         st["offset"] = u["update_id"] + 1
         msg = u.get("message") or {}
         chat = str((msg.get("chat") or {}).get("id", "")); text = (msg.get("text") or "").strip()
+        text = core.MENU_CMD.get(text, text)  # menü butonu → komut
         if not chat or not text.startswith("/"):
             continue
         parts = text.split(None, 1); cmd = parts[0].split("@")[0].lower(); arg = parts[1] if len(parts) > 1 else ""
         today = now_ist().date()
         try:
             if cmd == "/start":
-                st["subs"][chat] = {"on": True, "since": datetime.now(timezone.utc).isoformat()}
-                tg.send(chat, "✅ Bildirimler açıldı.\n\n" + core.HELP)
+                st["subs"][chat] = {"on": True, "since": datetime.now(timezone.utc).isoformat(), "menu": core.MENU_VERSION}
+                tg.send(chat, "✅ Bildirimler açıldı.\n\n" + core.HELP, reply_markup=core.MENU_KB)
+            elif cmd in ("/menu", "/menü"):
+                st["subs"].setdefault(chat, {})["menu"] = core.MENU_VERSION
+                tg.send(chat, "📂 <b>Menü</b>\nAlttaki butonlardan bir bölüm seç.", reply_markup=core.MENU_KB)
             elif cmd in ("/dur", "/stop"):
                 st["subs"].setdefault(chat, {})["on"] = False
                 tg.send(chat, "🔕 Bildirimler kapatıldı. Tekrar açmak için /start.")
@@ -227,7 +231,7 @@ def handle_commands(st, wait=0):
                 reply(chat, imgs_or(visual.report_images, hist["matches"], y, pk, lb, op, basket),
                       core.report_message(hist["matches"], y, pk, lb, op, basket) or "Dün için sonuçlanmış öneri yok.")
             else:
-                tg.send(chat, core.HELP)
+                tg.send(chat, core.HELP, reply_markup=core.MENU_KB)
         except Exception:
             traceback.print_exc()
             tg.send(chat, "Bir hata oluştu, biraz sonra tekrar dene.")
@@ -544,6 +548,16 @@ def bot():
     st = load_state(); st["subs"] = subs["subs"]  # yeni aboneler hemen bildirim alır
     try:  # komut menüsü her çalıştırmada güncellenir (yeni komutlar sabahı beklemeden menüde görünür)
         tg.set_commands(core.COMMANDS)
+    except Exception:
+        traceback.print_exc()
+    try:  # butonlu menüyü henüz almamış abonelere bir kez gönder (kanallar hariç: kanallarda buton menüsü olmaz)
+        for c, sub in subs["subs"].items():
+            if sub.get("on", True) and sub.get("menu") != core.MENU_VERSION:
+                if tg.send(c, "🆕 <b>Yeni menü</b>\nBölümler artık alttaki butonlarda: günün seçimleri, güçlü/orta, riskli, "
+                              "çok riskli, canlı, diğer sporlar ve karne. Komutlar da çalışmaya devam ediyor.",
+                           silent=True, reply_markup=core.MENU_KB):
+                    sub["menu"] = core.MENU_VERSION
+        _save(SUBS_FILE, subs)
     except Exception:
         traceback.print_exc()
     start = time.time(); last_live = 0.0; live_active = True; last_res = 0.0

@@ -37,12 +37,14 @@ def chunks(text):
     return out
 
 
-def send(chat_id, text, silent=False):
-    """Mesaj gönderir. Kullanıcı botu engellediyse False döner."""
+def send(chat_id, text, silent=False, reply_markup=None):
+    """Mesaj gönderir. Kullanıcı botu engellediyse False döner. reply_markup yalnızca son parçaya eklenir."""
     ok = True
-    for part in chunks(text):
+    parts = chunks(text)
+    for i, part in enumerate(parts):
         r = call("sendMessage", chat_id=chat_id, text=part, parse_mode="HTML",
-                 disable_web_page_preview="true", disable_notification="true" if silent else None)
+                 disable_web_page_preview="true", disable_notification="true" if silent else None,
+                 reply_markup=reply_markup if i == len(parts) - 1 else None)
         if not r.get("ok"):
             desc = (r.get("description") or "").lower()
             print("Telegram gönderilemedi:", chat_id, r.get("description"))
