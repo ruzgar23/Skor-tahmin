@@ -32,7 +32,7 @@ def daily_sections(data, basket, day, max_mid=8, max_cards=4, max_extra=6):
     kr.sort(key=lambda x: -x[1]["gap"])
     ex = sorted([(m, core.extra_pick(m)) for m in ms], key=lambda x: -(x[1]["prob"] if x[1] else 0))
     ex = sorted([x for x in ex if x[1]][:max_extra], key=lambda x: x[0]["ko"])
-    secs.append(("Ek seçimler (ilk yarı, takım golü)", [_row(m, g["label"], g["prob"], g["minOdds"], 4) for m, g in ex]))
+    secs.append(("Ek seçimler (ilk yarı)", [_row(m, g["label"], g["prob"], g["minOdds"], 4) for m, g in ex]))
     secs.append(("Kart seçimleri", [_row(m, pk["label"], pk["prob"], pk["minOdds"], 2) for m, pk in kr[:max_cards]]))
     bk = []
     for g in extra.basket_upcoming(basket):
@@ -104,6 +104,20 @@ def risky_images(data, day):
                               "iddaa oranı kartta yazan sınırın altındaysa oynama: piyasa ortalaması oranla bu seçimler %5 kaybettirdi."), accent)]
 
 
+def long_images(data, day):
+    """Çok riskli seçimler kartı: 3,20–3,70 ve 5,40–6,20 ayrı bölümler, her birinde en fazla 5 seçim."""
+    ls = core.long_lists(core.day_matches(data, day))
+    short = {"3,20–3,70": "tutma %27–31, 10'da ~3", "5,40–6,20": "tutma %16–18, 10'da ~1–2"}
+    secs = [(f"Oran {bn} · {short[bn]}", [_row(m, g["label"], g["prob"], g["minOdds"], 6) for m, g in sorted(rows, key=lambda x: x[0]["ko"])])
+            for bn, rows in ls if rows]
+    if not secs:
+        return []
+    n = sum(len(r) for _, r in secs); accent, _ = cards.SPORT["cokriskli"]
+    return [cards.daily_card("ÇOK RİSKLİ SEÇİMLER", f"{tr_date(day)} · {n} seçim · oran 3,20+ ve 5,40+", secs,
+                             ("Uzun kayıp serileri normaldir: 5,40+ oranlarda 10 seçimin hiç tutmama ihtimali %14. Kombine yapma, en fazla ⅛ birim oyna.",
+                              "iddaa oranı kartta yazan sınırın altındaysa oynama: piyasa ortalaması oranla bu seçimler %4–10 kaybettirdi."), accent)]
+
+
 def how_to():
     return ("<b>Nasıl kullanılır?</b>\n"
             "1️⃣ Karttaki maçı iddaa'da bul, <b>OYNA</b> yazan seçime bak.\n"
@@ -165,7 +179,7 @@ import pages as PG
 SHORT_LG = {"Premier League": "Premier L.", "İskoçya Premiership": "İskoçya 1", "İskoçya Championship": "İskoçya 2",
             "İskoçya League One": "İskoçya 3", "İskoçya League Two": "İskoçya 4", "Yunanistan Süper Lig": "Yunanistan",
             "Şampiyonlar Ligi": "Şamp. Ligi", "Konferans Ligi": "Konf. Ligi", "2. Bundesliga": "Bundesliga 2"}
-FOOT = ("Yeşil kutu güçlü, turuncu kutu orta, mavi kutu ek seçim (ilk yarı / takım golü). Kutusu olmayan maçta %60'ı geçen net seçim yok, zorlama. Oran, yazan sınırın altındaysa oynama.",
+FOOT = ("Yeşil kutu güçlü, turuncu kutu orta, mavi kutu ek seçim (ilk yarı). Kutusu olmayan maçta %60'ı geçen net seçim yok, zorlama. Oran, yazan sınırın altındaysa oynama.",
         "Olasılıklar garanti değildir. Kaybetmeyi göze alamayacağın parayla oynama.")
 
 
@@ -184,7 +198,7 @@ def all_matches_images(data, basket, day):
             cur = m["lgName"]; blocks.append(("head", cur))
         mm = dict(m, time=ko_local(m).strftime("%H:%M"), league_short=SHORT_LG.get(m["lgName"], m["lgName"]))
         g = core.grade(m)
-        if not g or g["tier"] < 2:   # ana seçim yoksa ek seçim (ilk yarı / takım golü) gösterilir
+        if not g or g["tier"] < 2:   # ana seçim yoksa ek seçim (ilk yarı) gösterilir
             x = core.extra_pick(m)
             g = dict(x, tier=4) if x else None
         blocks.append(PG.football_row(mm, g, nm))
@@ -241,7 +255,7 @@ def report_images(history, day, picks=None, live_bets=None, opicks=None, basket=
     lv = extra.live_day(live_bets, day)
     orow = extra.other_day_results(opicks, basket, day)
     xr = core.extra_results(history, day)
-    if not rows and not lv and not orow and not xr and not core.risky_results(history, day):
+    if not rows and not lv and not orow and not xr and not core.risky_results(history, day) and not core.long_results(history, day):
         return []
     k = []
     for tier, name in ((3, "güçlü"), (2, "orta")):
@@ -261,10 +275,13 @@ def report_images(history, day, picks=None, live_bets=None, opicks=None, basket=
     if rr:
         rw = sum(1 for _, _, ok in rr if ok)
         k.append((f"{rw}/{len(rr)}", f"riskli seçim tuttu (%{round(100 * rw / len(rr))})", PG.GREEN if rw / len(rr) >= .55 else PG.AMBER))
+    for bn, rows_ in core.long_results(history, day):
+        lw = sum(1 for _, _, ok in rows_ if ok)
+        k.append((f"{lw}/{len(rows_)}", f"çok riskli {bn}", PG.INK))
     if lv:
         lw = sum(1 for b in lv if b["ok"])
         k.append((f"{lw}/{len(lv)}", f"canlı seçim tuttu (%{round(100 * lw / len(lv))})", PG.GREEN if lw / len(lv) >= .7 else PG.AMBER))
-    blocks = [PG.kpi_row(k)]
+    blocks = [PG.kpi_row(k[i:i + 4]) for i in range(0, len(k), 4)]  # satır başına en fazla 4 özet
     ts = extra.teyit_summary(picks, history, day)
     if ts:
         (n1, w1), (n0, w0) = ts["ok"], ts["bad"]
@@ -272,13 +289,17 @@ def report_images(history, day, picks=None, live_bets=None, opicks=None, basket=
     if rows:
         blocks += [("head", "Maç öncesi seçimler")] + rows
     if xr:
-        blocks.append(("head", "Ek seçimler (ilk yarı, takım golü)"))
+        blocks.append(("head", "Ek seçimler (ilk yarı)"))
         for h, g, ok in xr:
             hh = dict(h, lgName=h["lgName"] + (f" · İY {h['ht'][0]}-{h['ht'][1]}" if g["label"].startswith("İY") and h.get("ht") else ""))
             blocks.append(PG.result_row(hh, g, ok, nm))
     if rr:
         blocks.append(("head", "Riskli seçimler (oran 1,75+)"))
         for h, g, ok in rr:
+            blocks.append(PG.result_row(h, g, ok, nm))
+    for bn, rows_ in core.long_results(history, day):
+        blocks.append(("head", f"Çok riskli seçimler · oran {bn}"))
+        for h, g, ok in rows_:
             blocks.append(PG.result_row(h, g, ok, nm))
     if lv:
         blocks.append(("head", "Canlı seçimler"))
