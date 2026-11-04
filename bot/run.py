@@ -542,6 +542,10 @@ def bot():
     bir sonrakini kendisi başlatır."""
     subs = _load(SUBS_FILE, {"offset": 0, "subs": {}}); subs.setdefault("offset", 0); subs.setdefault("subs", {})
     st = load_state(); st["subs"] = subs["subs"]  # yeni aboneler hemen bildirim alır
+    try:  # komut menüsü her çalıştırmada güncellenir (yeni komutlar sabahı beklemeden menüde görünür)
+        tg.set_commands(core.COMMANDS)
+    except Exception:
+        traceback.print_exc()
     start = time.time(); last_live = 0.0; live_active = True; last_res = 0.0
     while time.time() - start < BOT_SECONDS:
         try:
