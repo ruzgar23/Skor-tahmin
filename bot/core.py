@@ -564,7 +564,8 @@ HELP = ("<b>⚽ Skor Tahmin Botu</b>\n"
         "<b>🔴 Canlı</b>\n/canli – şu an oynanan maçlar\n\n"
         "<b>🏀 Diğer sporlar</b>\n/basket · /hokey · /tenis\n\n"
         "<b>📊 Takip</b>\n/karne – dünün sonuçları\n/kupon – kuponunu değerlendir (her satıra: takım seçim oran)\n\n"
-        "<b>⚙️ Ayarlar</b>\n/menu – menüyü göster · /nasil – nasıl oynanır\n/dur – bildirimleri kapat · /start – tekrar aç\n\n"
+        "<b>📒 Bahis defteri</b>\n/oynadim galatasaray 1 1.85 100 – oynadığın bahsi kaydet\n/defter – kâr/zarar özetin\n\n"
+        "<b>⚙️ Ayarlar</b>\n/ayarlar – hangi bildirimler gelsin · /menu – menüyü göster\n/nasil – nasıl oynanır · /dur – bildirimleri kapat · /start – tekrar aç\n\n"
         "<i>Olasılıklar garanti değildir. Kaybetmeyi göze alamayacağın parayla oynama.</i>")
 
 COMMANDS = [("secimler", "⚽ Günün seçimleri"), ("bugun", "📋 Bugünün tüm maçları"), ("guclu", "🟢 Güçlü öneriler"), ("orta", "🟡 Orta öneriler"),
@@ -572,6 +573,7 @@ COMMANDS = [("secimler", "⚽ Günün seçimleri"), ("bugun", "📋 Bugünün t�
             ("canli", "🔴 Şu an oynanan maçlar"), ("mac", "🔎 Tek maç: /mac takım"),
             ("basket", "🏀 Basketbol"), ("hokey", "🏒 Hokey (NHL)"), ("tenis", "🎾 Tenis"),
             ("karne", "📊 Dünün sonuçları"), ("kupon", "🧾 Kupon değerlendir"),
+            ("oynadim", "📒 Bahsini deftere yaz"), ("defter", "📒 Defterim: kâr/zarar"), ("ayarlar", "⚙️ Bildirim ayarları"),
             ("menu", "📂 Menüyü göster"), ("nasil", "❓ Nasıl oynanır"), ("dur", "🔕 Bildirimleri kapat"), ("yardim", "ℹ️ Yardım")]
 
 # Giriş alanının altında sürekli duran kategori menüsü (Telegram "reply keyboard"); buton yazısı → komut
@@ -580,10 +582,46 @@ MENU_ROWS = [["⚽ Günün seçimleri", "📋 Tüm maçlar"],
              ["🎲 Riskli 1,75+", "🔥 Çok riskli"],
              ["🔴 Canlı maçlar", "📊 Karne"],
              ["🏀 Basketbol", "🏒 Hokey", "🎾 Tenis"],
+             ["📒 Defterim", "⚙️ Ayarlar"],
              ["🧾 Kupon", "ℹ️ Yardım"]]
 MENU_CMD = {"⚽ Günün seçimleri": "/secimler", "📋 Tüm maçlar": "/bugun", "🟢 Güçlü": "/guclu", "🟡 Orta": "/orta",
             "🎲 Riskli 1,75+": "/riskli", "🔥 Çok riskli": "/cokriskli", "🔴 Canlı maçlar": "/canli", "📊 Karne": "/karne",
-            "🏀 Basketbol": "/basket", "🏒 Hokey": "/hokey", "🎾 Tenis": "/tenis", "🧾 Kupon": "/kupon", "ℹ️ Yardım": "/yardim"}
+            "🏀 Basketbol": "/basket", "🏒 Hokey": "/hokey", "🎾 Tenis": "/tenis", "🧾 Kupon": "/kupon", "ℹ️ Yardım": "/yardim",
+            "📒 Defterim": "/defter", "⚙️ Ayarlar": "/ayarlar"}
 MENU_KB = {"keyboard": [[{"text": t} for t in row] for row in MENU_ROWS], "resize_keyboard": True, "is_persistent": True,
            "input_field_placeholder": "Bir bölüm seç ya da /mac takım yaz"}
-MENU_VERSION = 1
+MENU_VERSION = 2
+MENU_NEWS = {1: "Bölümler artık alttaki butonlarda: günün seçimleri, güçlü/orta, riskli, çok riskli, canlı, diğer sporlar ve karne.",
+             2: "Menüye <b>📒 Defterim</b> (oynadığın bahislerin kâr/zararı, /oynadim ile kayıt) ve <b>⚙️ Ayarlar</b> "
+                "(hangi bildirimlerin geleceğini seç) eklendi."}
+
+# Bildirim ayarları: abone bazında kapatılabilen yayın bölümleri (komutla istenince her zaman gelir)
+SETTINGS = [("secimler", "⚽ Günün seçimleri"), ("karne", "📊 Sabah karnesi"), ("tummaclar", "📋 Tüm maçlar listesi"),
+            ("riskli", "🎲 Riskli seçimler"), ("cokriskli", "🔥 Çok riskli seçimler"), ("teyit", "⏰ Maç önü teyit"),
+            ("oran", "📉 Oran düşüşü uyarıları"), ("canli", "🔴 Canlı bildirimler"), ("sonuc", "🏁 Sonuç bildirimleri (WON/LOST)")]
+SETTINGS_TEXT = ("⚙️ <b>Bildirim ayarları</b>\nDokunarak aç ya da kapat. Kapalı bölümler sana gönderilmez; "
+                 "istediğin zaman komutla ya da menüden yine açabilirsin.")
+
+
+def settings_kb(sub):
+    off = set((sub or {}).get("off", []))
+    rows = [[{"text": f"{'❌' if k in off else '✅'} {lab}", "callback_data": f"set:{k}"}] for k, lab in SETTINGS]
+    rows.append([{"text": "✅ Hepsini aç", "callback_data": "set:*on"}, {"text": "🔕 Hepsini kapat", "callback_data": "set:*off"}])
+    return {"inline_keyboard": rows}
+
+
+def settings_toggle(sub, key):
+    """Ayarı değiştirir; kısa bir bildirim metni döner."""
+    off = set(sub.get("off", []))
+    keys = [k for k, _ in SETTINGS]
+    if key == "*on":
+        off = set(); msg = "Hepsi açık"
+    elif key == "*off":
+        off = set(keys); msg = "Hepsi kapalı (komutlar çalışmaya devam eder)"
+    elif key in keys:
+        if key in off: off.discard(key); msg = "Açıldı"
+        else: off.add(key); msg = "Kapatıldı"
+    else:
+        return "Bilinmeyen ayar"
+    sub["off"] = sorted(off)
+    return msg

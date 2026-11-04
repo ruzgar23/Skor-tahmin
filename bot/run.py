@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "engine"), os.path.join(ROOT, "bot")]
-import tg, core, extra, visual  # noqa: E402
+import tg, core, extra, visual, ledger  # noqa: E402
 
 SITE = os.environ.get("SITE_DIR", os.path.join(ROOT, "site-out"))
 STATE_DIR = os.environ.get("STATE_DIR", os.path.join(ROOT, "state"))
@@ -56,17 +56,18 @@ def save_state(st):
     _save(RUN_FILE, {k: v for k, v in st.items() if k != "subs"})
 
 
-def recipients(st):
-    return [c for c, v in st["subs"].items() if v.get("on", True)] + EXTRA
+def recipients(st, cat=None):
+    """Bildirim alacak sohbetler. cat verilirse o bölümü /ayarlar'dan kapatanlar çıkarılır (kanallar her zaman alır)."""
+    return [c for c, v in st["subs"].items() if v.get("on", True) and not (cat and cat in v.get("off", []))] + EXTRA
 
 
-def broadcast(st, text, silent=False):
-    for c in recipients(st):
+def broadcast(st, text, silent=False, cat=None):
+    for c in recipients(st, cat):
         tg.send(c, text, silent=silent)
 
 
-def broadcast_photos(st, pngs, caption=None, silent=False):
-    for c in recipients(st):
+def broadcast_photos(st, pngs, caption=None, silent=False, cat=None):
+    for c in recipients(st, cat):
         tg.send_album(c, pngs, caption=caption, silent=silent)
 
 
@@ -84,11 +85,11 @@ def reply(chat, pngs, text, caption=None):
     tg.send(chat, text)
 
 
-def broadcast_rich(st, pngs, text, caption=None, silent=False):
+def broadcast_rich(st, pngs, text, caption=None, silent=False, cat=None):
     if pngs:
-        broadcast_photos(st, pngs, caption=caption, silent=silent)
+        broadcast_photos(st, pngs, caption=caption, silent=silent, cat=cat)
     elif text:
-        broadcast(st, text, silent=silent)
+        broadcast(st, text, silent=silent, cat=cat)
 
 
 def bk():
@@ -159,6 +160,21 @@ def handle_commands(st, wait=0):
     data = jload("data.json", {"matches": []}); hist = jload("history.json", {"matches": []}); basket = bk()
     for u in ups:
         st["offset"] = u["update_id"] + 1
+        cq = u.get("callback_query")
+        if cq:  # /ayarlar butonları
+            try:
+                cchat = str(((cq.get("message") or {}).get("chat") or {}).get("id", "")); dat = cq.get("data") or ""
+                if cchat and dat.startswith("set:"):
+                    sub = st["subs"].setdefault(cchat, {"on": True})
+                    note = core.settings_toggle(sub, dat[4:])
+                    tg.call("answerCallbackQuery", callback_query_id=cq["id"], text=note)
+                    tg.call("editMessageReplyMarkup", chat_id=cchat, message_id=cq["message"]["message_id"],
+                            reply_markup=core.settings_kb(sub))
+                else:
+                    tg.call("answerCallbackQuery", callback_query_id=cq["id"])
+            except Exception:
+                traceback.print_exc()
+            continue
         msg = u.get("message") or {}
         chat = str((msg.get("chat") or {}).get("id", "")); text = (msg.get("text") or "").strip()
         text = core.MENU_CMD.get(text, text)  # menü butonu → komut
@@ -190,6 +206,14 @@ def handle_commands(st, wait=0):
             elif cmd == "/orta":
                 reply(chat, imgs_or(visual.daily_images, {"matches": [m for m in data["matches"] if (core.grade(m) or {}).get("tier") == 2]}, {}, today),
                       core.tier_list_message(data, today, 2))
+            elif cmd == "/ayarlar":
+                sub = st["subs"].setdefault(chat, {"on": True})
+                tg.send(chat, core.SETTINGS_TEXT + ("\n\n<i>Bildirimlerin şu an tamamen kapalı (/start ile aç).</i>" if not sub.get("on", True) else ""),
+                        reply_markup=core.settings_kb(sub))
+            elif cmd in ("/oynadim", "/oynadım"):
+                tg.send(chat, ledger.add(st, chat, data, basket, arg) if arg.strip() else ledger.HELP)
+            elif cmd == "/defter":
+                tg.send(chat, ledger.summary(st, chat, arg))
             elif cmd == "/riskli":
                 reply(chat, imgs_or(visual.risky_images, data, today), core.risky_message(data, today))
             elif cmd in ("/cokriskli", "/çokriskli"):
@@ -256,18 +280,18 @@ def daily_body(st):
         y = today - timedelta(days=1)
         pk = st.get("picks", {}); lb = st.get("live_bets", {}); op = st.get("opicks", {}); b = bk()
         broadcast_rich(st, imgs_or(visual.report_images, hist["matches"], y, pk, lb, op, b),
-                       core.report_message(hist["matches"], y, pk, lb, op, b), silent=True)
+                       core.report_message(hist["matches"], y, pk, lb, op, b), silent=True, cat="karne")
         st["sent"]["report"] = str(today - timedelta(days=1))
     if st["sent"].get("daily") != str(today):
         data = jload("data.json"); basket = bk()
         broadcast_rich(st, imgs_or(visual.daily_images, data, basket, today),
-                       visual.daily_text(data, basket, today) + core.FOOTER, caption=visual.how_to())
+                       visual.daily_text(data, basket, today) + core.FOOTER, caption=visual.how_to(), cat="secimler")
         if core.risky_list(core.day_matches(data, today)):  # riskli seçim yoksa mesaj gönderme
-            broadcast_rich(st, imgs_or(visual.risky_images, data, today), core.risky_message(data, today), silent=True)
+            broadcast_rich(st, imgs_or(visual.risky_images, data, today), core.risky_message(data, today), silent=True, cat="riskli")
         if any(rows for _, rows in core.long_lists(core.day_matches(data, today))):
-            broadcast_rich(st, imgs_or(visual.long_images, data, today), core.long_message(data, today), silent=True)
+            broadcast_rich(st, imgs_or(visual.long_images, data, today), core.long_message(data, today), silent=True, cat="cokriskli")
         broadcast_rich(st, imgs_or(visual.all_matches_images, data, basket, today), "",
-                       caption="Bugünün tüm maçları (futbol, basketbol, hokey, tenis). Ayrıntı için /mac takım", silent=True)
+                       caption="Bugünün tüm maçları (futbol, basketbol, hokey, tenis). Ayrıntı için /mac takım", silent=True, cat="tummaclar")
         st["sent"]["daily"] = str(today)
     remember_picks(st, today)
     check_moves(st)
@@ -310,7 +334,7 @@ def teyit(st):
         v["cur"] = extra.cur_prob(m, v); v["ok"] = v["cur"] > v["prob"] - extra.TEYIT_DROP
         items.append((m, v))
     if items:
-        broadcast_rich(st, imgs_or(visual.teyit_images, items), extra.teyit_message(items))
+        broadcast_rich(st, imgs_or(visual.teyit_images, items), extra.teyit_message(items), cat="teyit")
     return True
 
 
@@ -321,7 +345,7 @@ def check_moves(st):
         del seen[k]
     items = extra.move_alerts(jload("data.json", {"matches": []}), jload("basket.json", {}), seen)
     if items:
-        broadcast_rich(st, imgs_or(visual.move_images, items[:10]), extra.move_message(items[:10]))
+        broadcast_rich(st, imgs_or(visual.move_images, items[:10]), extra.move_message(items[:10]), cat="oran")
 
 
 def upcoming_soon(data, minutes=25):
@@ -345,7 +369,7 @@ def live_tick(st):
                    if p["k"] == a["k"]), None)
         if m and pk: alerts.append((m, pk))
     if alerts:
-        broadcast_rich(st, imgs_or(visual.live_images, alerts[:8]), core.live_alert_message(alerts[:8]))
+        broadcast_rich(st, imgs_or(visual.live_images, alerts[:8]), core.live_alert_message(alerts[:8]), cat="canli")
         bets = st.setdefault("live_bets", {}); now = datetime.now(timezone.utc).isoformat()
         for m, pk in alerts[:8]:
             bets.setdefault(f"{m['id']}|{pk['k']}", dict(
@@ -358,7 +382,14 @@ def live_tick(st):
 
 def football_final(lg, home, away, ko):
     """ESPN'den biten futbol maçının skoru ya da None."""
+    r = football_final_full(lg, home, away, ko)
+    return r[0] if r else None
+
+
+def football_final_full(lg, home, away, ko):
+    """ESPN'den biten futbol maçı: (skor, devre skoru ya da None, korner ya da None) ya da None."""
     import espn
+    import live as L
     slug = espn.SLUG.get(lg) or espn.CUPS.get(lg)
     if not slug:
         return None
@@ -373,10 +404,20 @@ def football_final(lg, home, away, ko):
             c = ev["competitions"][0]; sd = {x["homeAway"]: x for x in c["competitors"]}
             if espn.match_name(sd["home"]["team"]["displayName"], {home}) == home and espn.match_name(sd["away"]["team"]["displayName"], {away}) == away:
                 try:
-                    return [int(sd["home"]["score"]), int(sd["away"]["score"])]
+                    res = [int(sd["home"]["score"]), int(sd["away"]["score"])]
                 except (KeyError, ValueError, TypeError):
                     return None
+                return res, L.ht_score(c), L.corners_of(c)
     return None
+
+
+def ledger_tick(st):
+    """Defterdeki biten maçların bahislerini sonuçlandırır ve sahibine bildirir. st: abone dosyası (komutların durumu).
+    Dönüş: durum değişti mi."""
+    done = ledger.settle_all(st, football_final_full)
+    for chat, items in done.items():
+        tg.send(chat, ledger.result_message(items))
+    return bool(done)
 
 
 def results_tick(st):
@@ -418,7 +459,7 @@ def results_tick(st):
             v["rnote"] = "ok"; v["result"] = list(r)
             items.append((v, r[0], r[1]))
     if items:
-        broadcast_rich(st, imgs_or(visual.results_images, items), extra.results_message(items), silent=True)
+        broadcast_rich(st, imgs_or(visual.results_images, items), extra.results_message(items), silent=True, cat="sonuc")
     return bool(items)
 
 
@@ -474,7 +515,7 @@ def settle_live(st, live_by_id):
         if b.get("ok") is True and b.get("eid") in by_eid:
             b["res"] = by_eid[b["eid"]]["score"]
     if won:
-        broadcast_rich(st, imgs_or(visual.live_won_images, won), extra.live_won_message(won))
+        broadcast_rich(st, imgs_or(visual.live_won_images, won), extra.live_won_message(won), cat="sonuc")
 
 
 def live():
@@ -502,7 +543,7 @@ def live():
                    if p["k"] == a["k"]), None)
                 if m and pk: alerts.append((m, pk))
             if alerts:
-                broadcast_rich(st, imgs_or(visual.live_images, alerts[:8]), core.live_alert_message(alerts[:8]))
+                broadcast_rich(st, imgs_or(visual.live_images, alerts[:8]), core.live_alert_message(alerts[:8]), cat="canli")
             publish("Canlı güncelleme", ["live.json"] + (SITE_FILES_DAILY if rescanned else []))
             save_state(st)
             n_live = len(lv["matches"])
@@ -553,8 +594,8 @@ def bot():
     try:  # butonlu menüyü henüz almamış abonelere bir kez gönder (kanallar hariç: kanallarda buton menüsü olmaz)
         for c, sub in subs["subs"].items():
             if sub.get("on", True) and sub.get("menu") != core.MENU_VERSION:
-                if tg.send(c, "🆕 <b>Yeni menü</b>\nBölümler artık alttaki butonlarda: günün seçimleri, güçlü/orta, riskli, "
-                              "çok riskli, canlı, diğer sporlar ve karne. Komutlar da çalışmaya devam ediyor.",
+                news = core.MENU_NEWS[core.MENU_VERSION] if sub.get("menu") else core.MENU_NEWS[1] + " " + core.MENU_NEWS[core.MENU_VERSION]
+                if tg.send(c, "🆕 <b>Menü güncellendi</b>\n" + news + " Komutlar da çalışmaya devam ediyor.",
                            silent=True, reply_markup=core.MENU_KB):
                     sub["menu"] = core.MENU_VERSION
         _save(SUBS_FILE, subs)
@@ -577,6 +618,11 @@ def bot():
                 last_res = time.time()
                 if results_tick(st):
                     save_state(st)
+                try:  # defter abone dosyasında (komutlarla aynı yerde) tutulur
+                    if ledger_tick(subs):
+                        _save(SUBS_FILE, subs)
+                except Exception:
+                    traceback.print_exc()
             if time.time() - last_live >= LOOP_EVERY:
                 last_live = time.time()
                 if live_active or upcoming_soon(jload("data.json", {"matches": []})):
