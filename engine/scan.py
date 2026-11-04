@@ -42,6 +42,21 @@ def full_probs(lh, la, htr):
     H = E.score_matrix(lh * htr, la * htr, 0)
     h = E.markets(H)
     p.update({"HT1": h["1"], "HTX": h["X"], "HT2": h["2"], "HTO05": 1 - H[0, 0], "HTO15": h["O15"]})
+    # İY/MS (HF + İY sonucu + MS sonucu, ör. HF1X = ilk yarı 1, maç X): ilk yarı ve ikinci yarı bağımsız Poisson
+    S = E.score_matrix(lh * (1 - htr), la * (1 - htr), 0)
+    nH = H.shape[0]; hf = {}
+    for i in range(nH):
+        for j in range(nH):
+            if H[i, j] < 1e-7:
+                continue
+            r1 = "1" if i > j else ("X" if i == j else "2")
+            for k in range(nH):
+                for l in range(nH):
+                    a, b = i + k, j + l
+                    r2 = "1" if a > b else ("X" if a == b else "2")
+                    hf[r1 + r2] = hf.get(r1 + r2, 0.0) + H[i, j] * S[k, l]
+    for kk, v in hf.items():
+        p["HF" + kk] = float(v)
     # takım gol alt/üst (ev: HO05/HO15/HO25, deplasman: AO05/AO15/AO25)
     n = M.shape[0]; I, J = np.meshgrid(range(n), range(n), indexing="ij")
     for L in range(3):
@@ -119,7 +134,8 @@ def cup_lambdas(models, home, hlg, away, alg):
 
 
 HIST_P = ("1", "X", "2", "1X", "12", "X2", "O15", "O25", "O35", "BTTS", "HT1", "HTX", "HT2", "HTO05", "HTO15",
-          "HO05", "HO15", "HO25", "AO05", "AO15", "AO25")
+          "HO05", "HO15", "HO25", "AO05", "AO15", "AO25",
+          "HF11", "HF1X", "HF12", "HFX1", "HFXX", "HFX2", "HF21", "HF2X", "HF22")
 
 
 def slim(m):

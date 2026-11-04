@@ -19,6 +19,7 @@ KGY_FIX = 0.0
 D12_FIX = 0.02
 # 2Y sonucu: 2023-25'te kalibre, 2025-26'da ~3 puan iyimser; iki dönemin ortalaması kadar düşük gösterilir
 SH_FIX = 0.015
+TEAM_GOALS = True  # canlı Ev/Dep gol seçimleri açık (günlük bültenden kaldırıldı, canlıda kalıyor)
 
 # Canlı korner (backtest/live_corner_test.py, ESPN anlatımlarından 7.092 maç, 2023-25 öğrenme / 2025-26 test).
 # Kalan korner (her takım) = kalan_süre * [(1-w)*maç öncesi beklenti + w*maç içi tempo] * skor durumu * kırmızı kart;
@@ -107,7 +108,7 @@ def extra_live(lh, la, hs, as_, minute, period, rh=0, ra=0, ht=None, halftime=Fa
     rem = max(1 - done_share(minute, period), 0.0)
     Lh, La = lh * rem * mh, la * rem * ma
     ph, pa = _pois(Lh), _pois(La)
-    for side, cur, pv, tag, nm_ in (("E", hs, ph, "Ev", "ev"), ("D", as_, pa, "Dep", "dep")):
+    for side, cur, pv, tag, nm_ in ((("E", hs, ph, "Ev", "ev"), ("D", as_, pa, "Dep", "dep")) if TEAM_GOALS else ()):
         cdf = np.cumsum(pv)
         for k in range(cur, cur + 2):           # çizgi = k + 0,5: kalan gol ≥ k - cur + 1
             line = k + 0.5; need = k - cur + 1

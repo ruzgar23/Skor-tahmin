@@ -130,3 +130,11 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
 - Adil oranı 1,75–2,00 (tutma olasılığı %50–57) olan bahislerden maç başına en olası tek seçim, günde en çok 8 tane: MS 1/2, 2,5 Alt/Üst, 3,5 Alt, KG Var, Ev/Dep gol 1,5 Üst, İY 1,5 Üst ve birleşikler (MS 1/MS 2/12/X2 & 2,5 Üst). Testte kalibre çıkmayan KG Yok, 1X & 2,5 Üst ve MS & KG Yok listede yok.
 - Her sabah ayrı kart olarak gönderilir, `/riskli` ile istenir, karnede ayrı sayılır. Birim: ¼.
 - Test (`backtest/risky_test.py`): lig maçlarında 24.840 seçimin %55,2'si tuttu (beklenen %54,6; 8 sezonun hepsinde %54–57,5); kupalarda 311 seçimin %59,8'i (beklenen %54,5). Piyasa ortalaması oranla oynandığında getiri −%4,7: kâr ancak iddaa oranı kartta yazan sınırın üstündeyse mümkün.
+
+## Takım golü günlük bültenden kaldırıldı
+- Ev/Dep gol seçimleri günlük bültende (ek seçimler, riskli liste) artık yok; ek seçimler yalnızca İY 0,5 Üst ve İY 1,5 Alt. Canlıda takım golü bildirimleri devam ediyor.
+
+## Çok riskli seçimler (/cokriskli, oran 3,20–3,70 ve 5,40–6,20)
+- Her aralıkta maç başına en olası tek seçim, günde en çok 5'er tane: MS 1/X/2, İY 1/X/2, İY/MS, sonuç & 2,5 Alt-Üst, sonuç & KG. Doğru skor ve 3,5 Üst testte beklenenin altında kaldığı için yok. Her sabah ayrı kart, karnede ayrı. Birim: ⅛.
+- İY/MS olasılıkları ilk ve ikinci yarı ayrı Poisson ile hesaplanır (`scan.full_probs`, HF anahtarları).
+- Test (`backtest/longshot_test.py`, 8 sezon): 3,20–3,70 aralığında 24.143 seçimin %29,9'u tuttu (beklenen %29,5); 5,40–6,20 aralığında 25.488 seçimin %17,6'sı (beklenen %17,7). Piyasa ortalaması oranla getiri sırasıyla −%4,3 ve −%9,5: yüksek oranlarda büro payı daha büyük.

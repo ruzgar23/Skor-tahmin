@@ -26,7 +26,7 @@ TIER_LG = {"UCL": 0, "UEL": 0, "UECL": 0, "E0": 1, "SP1": 1, "I1": 1, "D1": 1, "
            "SC0": 1, "G1": 1, "E1": 2, "SP2": 2, "I2": 2, "D2": 2, "F2": 2, "SC1": 2, "E2": 3, "E3": 3, "SC2": 3, "SC3": 3}
 TIERNAME = {3: "Güçlü", 2: "Orta", 1: "Düşük güven"}
 HIT = {("MS", 3): .80, ("MS", 2): .67, ("O25", 2): .65, ("U25", 2): .63, ("KGV", 2): .64}
-UNIT = {3: "1 birim", 2: "½ birim", 4: "½ birim", 5: "¼ birim"}
+UNIT = {3: "1 birim", 2: "½ birim", 4: "½ birim", 5: "¼ birim", 6: "⅛ birim"}
 LABEL2KEY = {"MS 1": "1", "MS X": "X", "MS 2": "2", "2,5 Üst": "O25", "2,5 Alt": "U25", "KG Var": "BTTS", "KG Yok": "NBTTS"}
 
 
@@ -79,10 +79,8 @@ def grade(m):
 
 # Ek seçimler (ilk yarı ve takım gol alt/üst): maç başına en fazla bir tane, olasılık %70–80.
 # backtest/new_markets_test.py: 24.863 seçimde %76,9 tuttu (beklenen %76,0), 7 sezonun hepsinde %76–78.
-EXTRA = (("HTO05", "İY 0,5 Üst", False), ("HTO15", "İY 1,5 Alt", True),
-         ("HO05", "Ev gol 0,5 Üst", False), ("HO15", "Ev gol 1,5 Üst", False), ("HO15", "Ev gol 1,5 Alt", True),
-         ("HO25", "Ev gol 2,5 Alt", True), ("AO05", "Dep gol 0,5 Üst", False), ("AO15", "Dep gol 1,5 Üst", False),
-         ("AO15", "Dep gol 1,5 Alt", True), ("AO25", "Dep gol 2,5 Alt", True))
+# Takım golü (Ev/Dep gol) seçimleri kullanıcı isteğiyle kaldırıldı (4 Kasım 2026); yalnızca ilk yarı.
+EXTRA = (("HTO05", "İY 0,5 Üst", False), ("HTO15", "İY 1,5 Alt", True))
 EXTRA_KEY = {lab: (k, under) for k, lab, under in EXTRA}
 
 
@@ -166,7 +164,7 @@ def combo_lines(m):
 RISKY_LO, RISKY_HI = 0.50, 1 / 1.75
 RISKY_MAX = 8
 RISKY_SIMPLE = (("1", "MS 1"), ("2", "MS 2"), ("O25", "2,5 Üst"), ("U25", "2,5 Alt"), ("U35", "3,5 Alt"), ("BTTS", "KG Var"),
-                ("HO15", "Ev gol 1,5 Üst"), ("AO15", "Dep gol 1,5 Üst"), ("HTO15", "İY 1,5 Üst"))
+                ("HTO15", "İY 1,5 Üst"))  # takım golü kaldırıldı
 RISKY_COMBO = (("1", ("gol", "O", 2.5)), ("2", ("gol", "O", 2.5)), ("12", ("gol", "O", 2.5)), ("X2", ("gol", "O", 2.5)))
 
 
@@ -237,6 +235,101 @@ def risky_message(data, day):
     return "\n".join(out) + link_line()
 
 
+# Çok riskli seçimler: adil oranı 3,20–3,70 ya da 5,40–6,20 olan bahislerden, her aralıkta maç başına en olası tek seçim.
+# Pazarlar: MS, İY sonucu, İY/MS, sonuç & 2,5 Alt-Üst, sonuç & KG (backtest/longshot_test.py; doğru skor ve 3,5 Üst
+# beklenenin altında kaldığı için yok). Testte 3,20–3,70 %29,9 (beklenen %29,5), 5,40–6,20 %17,6 (beklenen %17,7).
+LONG_BANDS = (("3,20–3,70", 1 / 3.7, 1 / 3.2), ("5,40–6,20", 1 / 6.2, 1 / 5.4))
+LONG_MAX = 5
+R3 = {"1": lambda a, b: a > b, "X": lambda a, b: a == b, "2": lambda a, b: a < b}
+LONG_TOT = (("gol", "O", 2.5), ("gol", "U", 2.5), "BTTS", "NBTTS")
+LONG_TOTKEY = {("gol", "O", 2.5): "O25", ("gol", "U", 2.5): "U25", "BTTS": "BTTS", "NBTTS": "NBTTS"}
+LONG_TOTF = {"O25": lambda a, b: a + b >= 3, "U25": lambda a, b: a + b <= 2, "BTTS": lambda a, b: a > 0 and b > 0,
+             "NBTTS": lambda a, b: not (a > 0 and b > 0)}
+
+
+def long_cands(m):
+    p = m.get("p") or {}
+    out = []
+    for k in "1X2":
+        if k in p: out.append((f"MS:{k}", f"MS {k}", p[k]))
+        if "HT" + k in p: out.append((f"IY:{k}", f"İY {k}", p["HT" + k]))
+        for k2 in "1X2":
+            if "HF" + k + k2 in p: out.append((f"HF:{k}{k2}", f"İY/MS {k}/{k2}", p["HF" + k + k2]))
+        for tot in LONG_TOT:
+            v = combo_prob(m, k, tot)
+            if v is not None: out.append((f"RC:{k}|{LONG_TOTKEY[tot]}", combo_label(k, tot), v))
+    return out
+
+
+def long_pick(m, band):
+    """Maçın band aralığındaki çok riskli seçimi ya da None (tier 6)."""
+    if m.get("src") != "piyasa" or not all(m.get("known") or [False]):
+        return None
+    _, lo, hi = band
+    c = [x for x in long_cands(m) if lo <= x[2] <= hi]
+    if not c:
+        return None
+    k, lab, v = max(c, key=lambda x: x[2])
+    return dict(fam="LONG", key=k, label=lab, prob=v, tier=6, minOdds=1.03 / v, band=band[0])
+
+
+def settle_long(key, res, ht=None):
+    if not res:
+        return None
+    a, b = res; kind, rest = key.split(":")
+    if kind == "MS": return R3[rest](a, b)
+    if kind in ("IY", "HF"):
+        if not ht: return None
+        if kind == "IY": return R3[rest](ht[0], ht[1])
+        return R3[rest[0]](ht[0], ht[1]) and R3[rest[1]](a, b)
+    if kind == "RC":
+        r, t = rest.split("|"); return R3[r](a, b) and LONG_TOTF[t](a, b)
+    return None
+
+
+def long_lists(matches):
+    """[(bant adı, [(maç, seçim)])] her bantta olasılığa göre en fazla LONG_MAX."""
+    out = []
+    for band in LONG_BANDS:
+        rows = [(m, long_pick(m, band)) for m in matches]
+        out.append((band[0], sorted([x for x in rows if x[1]], key=lambda x: -x[1]["prob"])[:LONG_MAX]))
+    return out
+
+
+def long_results(history, day):
+    """[(bant adı, [(maç, seçim, tuttu mu)])]"""
+    if day.isoformat() < LONG_SINCE:
+        return []
+    done = [h for h in history if h.get("res") and ko_local(h).date() == day]
+    out = []
+    for bn, rows in long_lists(done):
+        rr = [(h, g, settle_long(g["key"], h["res"], h.get("ht"))) for h, g in rows]
+        rr = [x for x in rr if x[2] is not None]
+        if rr: out.append((bn, rr))
+    return out
+
+
+LONG_SINCE = "2026-11-05"
+LONG_NOTE = {"3,20–3,70": "tutma olasılığı %27–31 · 10 seçimin ortalama 3'ü tutar",
+             "5,40–6,20": "tutma olasılığı %16–18 · 10 seçimin ortalama 1–2'si tutar"}
+
+
+def long_message(data, day):
+    ls = long_lists(day_matches(data, day))
+    out = ["🔥 <b>Çok riskli seçimler</b>",
+           "Yüksek oran, düşük tutma olasılığı. Uzun kayıp serileri normaldir: 5,40+ oranlarda 10 seçimin hiç tutmama ihtimali %14. "
+           "Kombine yapma, en fazla ⅛ birim oyna."]
+    if not any(rows for _, rows in ls):
+        return "\n".join(out) + "\n\nBugün bu aralıklarda uygun seçim yok."
+    for bn, rows in ls:
+        if not rows: continue
+        out.append(f"\n<b>Oran {bn}</b> — {LONG_NOTE[bn]}")
+        out += [pick_line(m, g) for m, g in sorted(rows, key=lambda x: ko_local(x[0]))]
+    out.append("\n<i>8 sezonluk testte olasılıklar doğru çıktı ama piyasa ortalaması oranla 3,20–3,70 %4, 5,40–6,20 %10 kaybettirdi. "
+               "Kâr ancak iddaa oranı yazan sınırın üstündeyse mümkün.</i>")
+    return "\n".join(out) + link_line()
+
+
 def extra_results(history, day):
     """Dünün ek seçim sonuçları: [(maç, seçim, tuttu mu)]."""
     out = []
@@ -301,7 +394,7 @@ def daily_message(data, day):
     ex = sorted([(m, extra_pick(m)) for m in ms], key=lambda x: -(x[1]["prob"] if x[1] else 0))
     ex = [x for x in ex if x[1]][:6]
     if ex:
-        out.append("🔵 <b>Ek seçimler</b> — ilk yarı ve takım golü (testte %77 tuttu)")
+        out.append("🔵 <b>Ek seçimler</b> — ilk yarı (testte %76 tuttu)")
         out += [pick_line(m, dict(g, tier=4)) for m, g in sorted(ex, key=lambda x: ko_local(x[0]))]
         out.append("")
     if not strong and not mid:
@@ -396,7 +489,7 @@ def report_message(history, day, picks=None, live_bets=None, opicks=None, basket
         rows.append(f"{'✅' if ok else '❌'} {e(nm(h['home']))} {h['res'][0]}-{h['res'][1]} {e(nm(h['away']))} · "
                     f"{e(g['label'])} {pct(g['prob'])}")
     xr = extra_results(history, day)
-    if not rows and not lv and not xr and not risky_results(history, day):
+    if not rows and not lv and not xr and not risky_results(history, day) and not long_results(history, day):
         return None
     head = [f"📊 <b>Karne — {day.strftime('%d.%m.%Y')}</b>"]
     for tier in (3, 2):
@@ -405,11 +498,15 @@ def report_message(history, day, picks=None, live_bets=None, opicks=None, basket
             head.append(f"{TIERNAME[tier]}: {n} seçimin {k}'i tuttu ({pct(k / n)})")
     if xr:
         xw = sum(1 for _, _, ok in xr if ok)
-        head.append(f"Ek seçimler (ilk yarı, takım golü): {len(xr)} seçimin {xw}'i tuttu ({pct(xw / len(xr))})")
+        head.append(f"Ek seçimler (ilk yarı): {len(xr)} seçimin {xw}'i tuttu ({pct(xw / len(xr))})")
     rr = risky_results(history, day)
     if rr:
         rw = sum(1 for _, _, ok in rr if ok)
         head.append(f"Riskli seçimler (1,75+): {len(rr)} seçimin {rw}'i tuttu ({pct(rw / len(rr))}; beklenen ~%55)")
+    lr = long_results(history, day)
+    for bn, rows_ in lr:
+        lw = sum(1 for _, _, ok in rows_ if ok)
+        head.append(f"Çok riskli ({bn}): {len(rows_)} seçimin {lw}'i tuttu (beklenen ~%{30 if bn.startswith('3') else 18})")
     ts = extra.teyit_summary(picks, history, day)
     if ts:
         (n1, w1), (n0, w0) = ts["ok"], ts["bad"]
@@ -420,6 +517,9 @@ def report_message(history, day, picks=None, live_bets=None, opicks=None, basket
              + (["🎲 <b>Riskli seçimler</b>\n" + "\n".join(
                  f"{'✅' if ok else '❌'} {e(nm(h['home']))} {h['res'][0]}-{h['res'][1]} {e(nm(h['away']))} · {e(g['label'])} {pct(g['prob'])}"
                  for h, g, ok in rr)] if rr else [])
+             + [f"🔥 <b>Çok riskli · {bn}</b>\n" + "\n".join(
+                 f"{'✅' if ok else '❌'} {e(nm(h['home']))} {h['res'][0]}-{h['res'][1]} {e(nm(h['away']))} · {e(g['label'])} {pct(g['prob'])}"
+                 for h, g, ok in rows_) for bn, rows_ in lr]
              + (["\n".join(lv).strip()] if lv else []))
     return "\n\n".join(parts) + "\n\n<i>Tek günlük sonuç şansa çok bağlıdır.</i>"
 
@@ -456,13 +556,13 @@ def live_list_message(live):
 HELP = ("<b>Skor Tahmin Botu</b>\n"
         "Her sabah günün maç önerilerini, maç sırasında canlı fırsat adaylarını ve günün karnesini gönderir.\n\n"
         "/secimler – günün seçimleri (görsel)\n/nasil – nasıl oynanır\n"
-        "/bugun – bugünün tüm maçları\n/guclu – güçlü öneriler\n/orta – orta öneriler\n/riskli – riskli ama yüksek oranlı seçimler (1,75+)\n"
+        "/bugun – bugünün tüm maçları\n/guclu – güçlü öneriler\n/orta – orta öneriler\n/riskli – riskli ama yüksek oranlı seçimler (1,75+)\n/cokriskli – çok riskli seçimler (3,20–3,70 ve 5,40–6,20)\n"
         "/canli – şu an oynanan maçlar\n/mac galatasaray – tek maçın ayrıntısı\n/basket – basketbol · /hokey – NHL · /tenis – tenis\n"
         "/kupon – kuponunu değerlendir (her satıra: takım seçim oran)\n/karne – dünün sonuçları (canlı ve diğer sporlar dahil)\n"
         "/dur – bildirimleri kapat · /start – tekrar aç\n\n"
         "<i>Komutlara birkaç dakika içinde cevap verilir. Olasılıklar garanti değildir.</i>")
 
-COMMANDS = [("secimler", "Günün seçimleri (görsel)"), ("nasil", "Nasıl oynanır"), ("bugun", "Bugünün tüm maçları"), ("guclu", "Güçlü öneriler"), ("orta", "Orta öneriler"), ("riskli", "Riskli seçimler (oran 1,75+)"),
+COMMANDS = [("secimler", "Günün seçimleri (görsel)"), ("nasil", "Nasıl oynanır"), ("bugun", "Bugünün tüm maçları"), ("guclu", "Güçlü öneriler"), ("orta", "Orta öneriler"), ("riskli", "Riskli seçimler (oran 1,75+)"), ("cokriskli", "Çok riskli seçimler (oran 3,2+ ve 5,4+)"),
             ("canli", "Şu an oynanan maçlar"), ("mac", "Tek maç: /mac takım"), ("basket", "Basketbol maçları"), ("hokey", "Hokey (NHL) maçları"), ("tenis", "Tenis seçimleri"),
             ("kupon", "Kupon değerlendir"), ("karne", "Dünün sonuçları"),
             ("dur", "Bildirimleri kapat"), ("yardim", "Yardım")]
