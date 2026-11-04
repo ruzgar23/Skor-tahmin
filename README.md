@@ -138,3 +138,7 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
 - Her aralıkta maç başına en olası tek seçim, günde en çok 5'er tane: MS 1/X/2, İY 1/X/2, İY/MS, sonuç & 2,5 Alt-Üst, sonuç & KG. Doğru skor ve 3,5 Üst testte beklenenin altında kaldığı için yok. Her sabah ayrı kart, karnede ayrı. Birim: ⅛.
 - İY/MS olasılıkları ilk ve ikinci yarı ayrı Poisson ile hesaplanır (`scan.full_probs`, HF anahtarları).
 - Test (`backtest/longshot_test.py`, 8 sezon): 3,20–3,70 aralığında 24.143 seçimin %29,9'u tuttu (beklenen %29,5); 5,40–6,20 aralığında 25.488 seçimin %17,6'sı (beklenen %17,7). Piyasa ortalaması oranla getiri sırasıyla −%4,3 ve −%9,5: yüksek oranlarda büro payı daha büyük.
+
+## Telegram menüsü
+- Giriş alanının altında sürekli duran butonlu menü: Günün seçimleri, Tüm maçlar, Güçlü, Orta, Riskli 1,75+, Çok riskli, Canlı maçlar, Karne, Basketbol, Hokey, Tenis, Kupon, Yardım. `/menu` ile tekrar gösterilir; mevcut abonelere bir kez gönderilir.
+- Yardım metni ve komut listesi kategorilere ayrıldı (Futbol, Yüksek oran, Canlı, Diğer sporlar, Takip, Ayarlar).

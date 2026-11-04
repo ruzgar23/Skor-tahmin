@@ -553,16 +553,37 @@ def live_list_message(live):
     return "\n".join(out) + link_line()
 
 
-HELP = ("<b>Skor Tahmin Botu</b>\n"
-        "Her sabah günün maç önerilerini, maç sırasında canlı fırsat adaylarını ve günün karnesini gönderir.\n\n"
-        "/secimler – günün seçimleri (görsel)\n/nasil – nasıl oynanır\n"
-        "/bugun – bugünün tüm maçları\n/guclu – güçlü öneriler\n/orta – orta öneriler\n/riskli – riskli ama yüksek oranlı seçimler (1,75+)\n/cokriskli – çok riskli seçimler (3,20–3,70 ve 5,40–6,20)\n"
-        "/canli – şu an oynanan maçlar\n/mac galatasaray – tek maçın ayrıntısı\n/basket – basketbol · /hokey – NHL · /tenis – tenis\n"
-        "/kupon – kuponunu değerlendir (her satıra: takım seçim oran)\n/karne – dünün sonuçları (canlı ve diğer sporlar dahil)\n"
-        "/dur – bildirimleri kapat · /start – tekrar aç\n\n"
-        "<i>Komutlara birkaç dakika içinde cevap verilir. Olasılıklar garanti değildir.</i>")
+HELP = ("<b>⚽ Skor Tahmin Botu</b>\n"
+        "Her sabah günün seçimlerini, maç sırasında canlı fırsatları ve dünün karnesini gönderir. "
+        "Alttaki menü butonlarını ya da komutları kullanabilirsin.\n\n"
+        "<b>⚽ Futbol</b>\n"
+        "/secimler – günün seçimleri\n/bugun – bugünün tüm maçları\n/guclu · /orta – güven seviyesine göre\n"
+        "/mac galatasaray – tek maçın ayrıntısı\n\n"
+        "<b>🎲 Yüksek oran</b>\n"
+        "/riskli – riskli seçimler (oran 1,75+)\n/cokriskli – çok riskli (3,20–3,70 ve 5,40–6,20)\n\n"
+        "<b>🔴 Canlı</b>\n/canli – şu an oynanan maçlar\n\n"
+        "<b>🏀 Diğer sporlar</b>\n/basket · /hokey · /tenis\n\n"
+        "<b>📊 Takip</b>\n/karne – dünün sonuçları\n/kupon – kuponunu değerlendir (her satıra: takım seçim oran)\n\n"
+        "<b>⚙️ Ayarlar</b>\n/menu – menüyü göster · /nasil – nasıl oynanır\n/dur – bildirimleri kapat · /start – tekrar aç\n\n"
+        "<i>Olasılıklar garanti değildir. Kaybetmeyi göze alamayacağın parayla oynama.</i>")
 
-COMMANDS = [("secimler", "Günün seçimleri (görsel)"), ("nasil", "Nasıl oynanır"), ("bugun", "Bugünün tüm maçları"), ("guclu", "Güçlü öneriler"), ("orta", "Orta öneriler"), ("riskli", "Riskli seçimler (oran 1,75+)"), ("cokriskli", "Çok riskli seçimler (oran 3,2+ ve 5,4+)"),
-            ("canli", "Şu an oynanan maçlar"), ("mac", "Tek maç: /mac takım"), ("basket", "Basketbol maçları"), ("hokey", "Hokey (NHL) maçları"), ("tenis", "Tenis seçimleri"),
-            ("kupon", "Kupon değerlendir"), ("karne", "Dünün sonuçları"),
-            ("dur", "Bildirimleri kapat"), ("yardim", "Yardım")]
+COMMANDS = [("secimler", "⚽ Günün seçimleri"), ("bugun", "📋 Bugünün tüm maçları"), ("guclu", "🟢 Güçlü öneriler"), ("orta", "🟡 Orta öneriler"),
+            ("riskli", "🎲 Riskli seçimler (oran 1,75+)"), ("cokriskli", "🔥 Çok riskli (oran 3,2+ ve 5,4+)"),
+            ("canli", "🔴 Şu an oynanan maçlar"), ("mac", "🔎 Tek maç: /mac takım"),
+            ("basket", "🏀 Basketbol"), ("hokey", "🏒 Hokey (NHL)"), ("tenis", "🎾 Tenis"),
+            ("karne", "📊 Dünün sonuçları"), ("kupon", "🧾 Kupon değerlendir"),
+            ("menu", "📂 Menüyü göster"), ("nasil", "❓ Nasıl oynanır"), ("dur", "🔕 Bildirimleri kapat"), ("yardim", "ℹ️ Yardım")]
+
+# Giriş alanının altında sürekli duran kategori menüsü (Telegram "reply keyboard"); buton yazısı → komut
+MENU_ROWS = [["⚽ Günün seçimleri", "📋 Tüm maçlar"],
+             ["🟢 Güçlü", "🟡 Orta"],
+             ["🎲 Riskli 1,75+", "🔥 Çok riskli"],
+             ["🔴 Canlı maçlar", "📊 Karne"],
+             ["🏀 Basketbol", "🏒 Hokey", "🎾 Tenis"],
+             ["🧾 Kupon", "ℹ️ Yardım"]]
+MENU_CMD = {"⚽ Günün seçimleri": "/secimler", "📋 Tüm maçlar": "/bugun", "🟢 Güçlü": "/guclu", "🟡 Orta": "/orta",
+            "🎲 Riskli 1,75+": "/riskli", "🔥 Çok riskli": "/cokriskli", "🔴 Canlı maçlar": "/canli", "📊 Karne": "/karne",
+            "🏀 Basketbol": "/basket", "🏒 Hokey": "/hokey", "🎾 Tenis": "/tenis", "🧾 Kupon": "/kupon", "ℹ️ Yardım": "/yardim"}
+MENU_KB = {"keyboard": [[{"text": t} for t in row] for row in MENU_ROWS], "resize_keyboard": True, "is_persistent": True,
+           "input_field_placeholder": "Bir bölüm seç ya da /mac takım yaz"}
+MENU_VERSION = 1
