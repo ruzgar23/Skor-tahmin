@@ -219,7 +219,10 @@ def pre_lambdas(c, fd_lams):
     return (lh, la), "kapanış oranı"
 
 
-TOP = {"E0", "SP1", "I1", "D1", "F1", "T1", "N1", "P1", "UCL", "UEL", "UECL", "E1", "D2", "SP2", "I2", "F2", "SC0", "G1"}
+# Canlı bildirim gönderilen ligler. League One ve League Two 2025-26 simülasyonunda %83,1 ve %82,5 tuttu
+# (beklenen %82,1 / %81,8; ESPN gol dakikaları). İskoçya alt ligleri test verisi olmadığı için yok.
+TOP = {"E0", "SP1", "I1", "D1", "F1", "T1", "N1", "P1", "UCL", "UEL", "UECL", "E1", "D2", "SP2", "I2", "F2", "SC0", "G1",
+       "E2", "E3"}
 
 LABELS = {"1": "MS 1", "X": "MS X", "2": "MS 2", "1X": "Çifte şans 1X", "X2": "Çifte şans X2", "12": "Çifte şans 12",
           "BTTS": "KG Var", "NBTTS": "KG Yok", "GOAL": "Kalan sürede gol olur", "NOGOAL": "Kalan sürede gol olmaz",
