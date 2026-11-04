@@ -9,7 +9,7 @@ Futbol maçları için olasılık tahminleri: maç sonucu, çifte şans, alt/üs
 | Ne zaman | Ne gelir |
 |---|---|
 | Her sabah 09:30 (TR) | Dünün karnesi ve günün güçlü/orta önerileri (seçim, olasılık, oynamaya değmesi için gereken en düşük iddaa oranı) |
-| Maç saatlerinde, 5 dakikada bir | Canlı fırsat adayları: dakika, skor, kartlar, seçim, olasılık, gereken en düşük canlı oran |
+| Maç saatlerinde, 3 dakikada bir | Canlı fırsat adayları: dakika, skor, kartlar, seçim, olasılık, gereken en düşük canlı oran |
 | Gün içinde | Oran düşüşü uyarıları: bir maçın oranı açılıştan bu yana belirgin şekilde düşerse |
 | Her zaman (birkaç saniye içinde) | Bot komutları: `/secimler`, `/bugun`, `/guclu`, `/orta`, `/canli`, `/mac takım`, `/basket`, `/kupon`, `/karne`, `/nasil`, `/dur` |
 
