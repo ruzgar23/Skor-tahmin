@@ -6,13 +6,19 @@ from datetime import datetime, timedelta, timezone
 SLUG = {"E0": "eng.1", "E1": "eng.2", "E2": "eng.3", "E3": "eng.4", "SP1": "esp.1", "SP2": "esp.2",
         "I1": "ita.1", "I2": "ita.2", "D1": "ger.1", "D2": "ger.2", "F1": "fra.1", "F2": "fra.2",
         "T1": "tur.1", "N1": "ned.1", "P1": "por.1", "SC0": "sco.1", "SC1": "sco.2", "SC2": "sco.3",
-        "SC3": "sco.4", "G1": "gre.1"}
+        "SC3": "sco.4", "G1": "gre.1", "B1": "bel.1",
+        "NOR": "nor.1", "SWE": "swe.1", "FIN": "fin.1", "BRA": "bra.1", "USA": "usa.1", "JPN": "jpn.1"}
 
-CUPS = {"UCL": "uefa.champions", "UEL": "uefa.europa", "UECL": "uefa.europa.conf"}
-CUP_NAMES = {"UCL": "Şampiyonlar Ligi", "UEL": "Avrupa Ligi", "UECL": "Konferans Ligi"}
+CUPS = {"UCL": "uefa.champions", "UEL": "uefa.europa", "UECL": "uefa.europa.conf",
+        # milli maçlar kupa gibi işlenir (fikstür, sonuç, canlı, karne); seçimler yalnızca MS (backtest: 435 maç, 2026)
+        "NATNL": "uefa.nations", "NATFR": "fifa.friendly", "NATCN": "concacaf.nations.league", "NATEQ": "uefa.euroq"}
+CUP_NAMES = {"UCL": "Şampiyonlar Ligi", "UEL": "Avrupa Ligi", "UECL": "Konferans Ligi",
+             "NATNL": "UEFA Uluslar Ligi", "NATFR": "Hazırlık maçı (milli)", "NATCN": "CONCACAF Uluslar Ligi", "NATEQ": "EURO elemeleri"}
+NATIONAL = {"NATNL", "NATFR", "NATCN", "NATEQ"}
 
 # ESPN adı (normalize) -> football-data adı; otomatik eşleşmenin kaçırdıkları
 ALIAS = {
+    "redbullnewyork": "New York Red Bulls", "lafc": "Los Angeles FC", "hamarkameratene": "HamKam",
     "manchestercity": "Man City", "manchesterunited": "Man United", "nottinghamforest": "Nott'm Forest",
     "wolverhamptonwanderers": "Wolves", "sheffieldwednesday": "Sheffield Weds", "sheffieldunited": "Sheffield United",
     "queensparkrangers": "QPR", "westbromwichalbion": "West Brom", "brightonhovealbion": "Brighton",
@@ -111,6 +117,8 @@ CUP_NO_MATCH = {"redstarbelgrade", "crvenazvezda", "spartaprague", "slaviaprague
 
 def resolve(lg, name, team_names):
     """(football-data adı, takımın ligi) ya da (None, None). Kupalarda tüm liglerde arar."""
+    if lg in NATIONAL:  # milli takımlar kulüp adlarıyla eşleştirilmez
+        return None, None
     if lg not in SLUG and norm(name) in CUP_NO_MATCH:
         return None, None
     if lg in SLUG:

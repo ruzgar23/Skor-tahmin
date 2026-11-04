@@ -1,4 +1,4 @@
-"""Avrupa kupaları (ŞL, AL, KL): ESPN gol dakikaları + maç öncesi DraftKings oranları (pickcenter; 2026'dan itibaren var).
+"""Avrupa kupaları (ŞL, AL, KL; SLUGS ile milli maçlar da): ESPN gol dakikaları + maç öncesi DraftKings oranları (pickcenter; 2026'dan itibaren var).
 Ek seçimlerin ve canlı modelin kupalarda testi için. Kullanım: python -I backtest/cup_events.py <çıktı.pkl> [başlangıç YYYYMM]"""
 import sys, os, json, gzip, re, time, pickle, urllib.request, collections
 import concurrent.futures as cf
@@ -71,7 +71,9 @@ def summ(m):
         return None
 
 
-jobs = [(lg, slug, ym) for lg, slug in espn.CUPS.items() for ym in months()]
+# İsteğe bağlı: SLUGS="NAT_NL:uefa.nations,NAT_FR:fifa.friendly" ile başka turnuvalar (ör. milli maçlar)
+SL = dict(x.split(":") for x in os.environ["SLUGS"].split(",")) if os.environ.get("SLUGS") else espn.CUPS
+jobs = [(lg, slug, ym) for lg, slug in SL.items() for ym in months()]
 with cf.ThreadPoolExecutor(8) as ex: M = [x for r in ex.map(month, jobs) for x in r]
 M = list({m["id"]: m for m in M}.values()); print("biten maç", len(M), flush=True)
 with cf.ThreadPoolExecutor(12) as ex: R = [m for m in ex.map(summ, M) if m]
