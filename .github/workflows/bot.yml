@@ -1,5 +1,5 @@
 name: Bot
-# Tek sürekli iş: Telegram komutlarına birkaç saniyede cevap verir, maç varken 5 dakikada bir canlı kontrol yapar,
+# Tek sürekli iş: Telegram komutlarına birkaç saniyede cevap verir, maç varken 3 dakikada bir canlı kontrol yapar,
 # her sabah 09:30'da (Türkiye) günün seçimlerini gönderir ve gün içinde verileri tazeler.
 # Her çalıştırma ~55 dakika sürer ve sonunda bir sonrakini kendisi başlatır (zincir).
 # Zamanlayıcı yalnızca yedektir: zincir bir sebeple koparsa en geç 30 dakikada yeniden başlar.
@@ -23,7 +23,7 @@ jobs:
       TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
       SITE_URL: ${{ vars.SITE_URL }}
       BOT_SECONDS: "3300"
-      LIVE_EVERY_SEC: "300"
+      LIVE_EVERY_SEC: "180"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup

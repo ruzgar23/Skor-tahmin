@@ -1,7 +1,7 @@
 """GitHub Actions giriş noktası.
 
   python bot/run.py daily     # sabah: tarama + dünün karnesi + günün önerileri
-  python bot/run.py live      # canlı döngü: 5 dakikada bir kontrol, maç kalmayınca biter
+  python bot/run.py live      # canlı döngü: 3 dakikada bir kontrol, maç kalmayınca biter
   python bot/run.py commands  # bekleyen bot komutlarını cevaplar
 
 Ortam değişkenleri:
@@ -27,7 +27,7 @@ SUBS_FILE = os.path.join(STATE_DIR, "subs", "subs.json")   # yalnızca komut iş
 RUN_FILE = os.path.join(STATE_DIR, "run", "run.json")      # sabah ve canlı işleri yazar
 CMD_SECONDS = int(os.environ.get("CMD_SECONDS", "560"))
 EXTRA = [c.strip() for c in os.environ.get("TELEGRAM_CHAT_ID", "").split(",") if c.strip()]
-LOOP_EVERY = int(os.environ.get("LIVE_EVERY_SEC", "300"))
+LOOP_EVERY = int(os.environ.get("LIVE_EVERY_SEC", "180"))
 MAX_LOOP = int(os.environ.get("LIVE_MAX_SEC", str(5 * 3600 + 40 * 60)))
 
 
@@ -537,7 +537,7 @@ MORNING = (9, 30)
 
 
 def bot():
-    """Tek sürekli iş: komutları dinler, maç varken 5 dakikada bir canlı kontrol yapar, sabah taramasını
+    """Tek sürekli iş: komutları dinler, maç varken 3 dakikada bir canlı kontrol yapar, sabah taramasını
     zamanında çalıştırır, gün içinde 2 saatte bir verileri tazeler. ~55 dakika sonra biter; iş akışı
     bir sonrakini kendisi başlatır."""
     subs = _load(SUBS_FILE, {"offset": 0, "subs": {}}); subs.setdefault("offset", 0); subs.setdefault("subs", {})
