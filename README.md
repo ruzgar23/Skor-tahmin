@@ -169,3 +169,8 @@ Bota `/start` yazan herkes bildirimleri alır, `/dur` ile kapatır. Abone listes
 
 ## Canlı: League One ve League Two
 - Canlı gol ve devre arası bildirimleri League One ve League Two'ya da açıldı. 2025-26 simülasyonu (ESPN gol dakikaları, maç başına ilk bildirim): League One %83,1 (beklenen %82,1), League Two %82,5 (beklenen %81,8). Aynı testte diğer alt ligler: La Liga 2 %82,5, Serie B %85,3, 2. Bundesliga %81,3, Ligue 2 %79,9; devre arası bildirimi %79,2 (beklenen %77,7). İskoçya alt liglerinde test verisi yok, canlı bildirim yok.
+
+## Kayıt modu (video çekimi için)
+- **Settings → Secrets and variables → Actions → Variables** altında `KAYIT_MODU` = `1` eklenince mesajlarda ve görsel kartlarda oynama talimatları gizlenir: "OYNA:" yerine "TAHMİN:", "OYNAMA:" yerine "İPTAL:" yazılır; birim önerileri ve "tekli oyna / kasanın %2'si" gibi cümleler çıkarılır.
+- Olasılıklar, oran sınırları, karne ve canlı sonuçlar aynen kalır. Değişken bir sonraki çalıştırmada (en geç ~1 saat) devreye girer; kapatmak için silmek ya da `0` yapmak yeterli.
+- Kod: `bot/kayit.py`.

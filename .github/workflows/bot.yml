@@ -22,6 +22,7 @@ jobs:
       TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
       SITE_URL: ${{ vars.SITE_URL }}
+      KAYIT_MODU: ${{ vars.KAYIT_MODU }}
       BOT_SECONDS: "3300"
       LIVE_EVERY_SEC: "180"
     steps:

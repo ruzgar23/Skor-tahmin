@@ -1,5 +1,6 @@
 """Telegram Bot API yardımcıları (yalnızca standart kütüphane)."""
 import json, os, time, urllib.request, urllib.parse
+import kayit
 
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "").strip()
 API = f"https://api.telegram.org/bot{TOKEN}/"
@@ -9,6 +10,7 @@ LIMIT = 3900  # Telegram sınırı 4096; HTML etiketleri için pay
 def call(method, **params):
     if not TOKEN:
         raise RuntimeError("TELEGRAM_TOKEN tanımlı değil (deponun Actions secret'larına ekleyin).")
+    params = {k: (kayit.temizle(v) if k in ("text", "caption") else v) for k, v in params.items()}
     data = urllib.parse.urlencode({k: (json.dumps(v) if isinstance(v, (dict, list)) else v)
                                    for k, v in params.items() if v is not None}).encode()
     for attempt in range(3):
@@ -74,6 +76,7 @@ def send_photo(chat_id, png, caption=None, silent=False):
     def field(name, value):
         parts.append(f"--{b}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n".encode())
     field("chat_id", chat_id)
+    caption = kayit.temizle(caption)
     if caption:
         field("caption", caption[:1000]); field("parse_mode", "HTML")
     if silent:
@@ -110,7 +113,7 @@ def send_album(chat_id, pngs, caption=None, silent=False):
         for i, _ in enumerate(grp):
             it = {"type": "photo", "media": f"attach://p{i}"}
             if i == 0 and gi == 0 and caption:
-                it["caption"] = caption[:1000]; it["parse_mode"] = "HTML"
+                it["caption"] = kayit.temizle(caption)[:1000]; it["parse_mode"] = "HTML"
             media.append(it)
         def field(name, value):
             parts.append(f"--{b}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n".encode())

@@ -8,6 +8,7 @@ Ortam değişkenleri:
   TELEGRAM_TOKEN   (secret)  bot token'ı
   TELEGRAM_CHAT_ID (isteğe bağlı) virgülle ayrılmış ek alıcılar, örn. bir kanal: @kanaladi
   SITE_URL         (isteğe bağlı) GitHub Pages adresi
+  KAYIT_MODU       (isteğe bağlı) 1 ise video kaydı için oynama talimatları gizlenir (bot/kayit.py)
   SITE_DIR         gh-pages çalışma kopyası (varsayılan ./site-out)
   STATE_DIR        bot durumu (abone listesi vb., Actions önbelleğinde tutulur; varsayılan ./state)
   FD_DIR           football-data önbelleği (varsayılan ./fd)
