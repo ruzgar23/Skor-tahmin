@@ -15,6 +15,11 @@ AKTIF = os.environ.get("KAYIT_MODU", "").strip() == "1"
 _KURALLAR = [
     (re.compile(r"Tekli oyna; 1 birim = kasanın %2'si\.\s*"), ""),
     (re.compile(r"\s*Kombine yapma, en fazla \S+ birim oyna\."), ""),
+    (re.compile(r"Canlı oran, yazan sınırın altındaysa oynama; c"), "C"),
+    (re.compile(r"İddaa'nın canlı oranı bu sınırın altındaysa oynama; c"), "C"),
+    (re.compile(r"[iİ]ddaa oranı (?:kartta )?yazan sınırın altındaysa oynama: p"), "P"),
+    (re.compile(r"İddaa oranı kartta yazan sınırın altındaysa o maçı geç\.\s*"), ""),
+    (re.compile(r"İPTAL yazanı oynama\."), "İPTAL yazan seçim geçersizdir."),
     (re.compile(r"\s*·\s*(?:1|½|¼|⅛) birim"), ""),
     (re.compile(r"(?:1|½|¼|⅛) birim\b"), ""),
     (re.compile(r" ise oyna, altındaysa geç"), ""),

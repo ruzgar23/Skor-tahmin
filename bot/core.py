@@ -588,7 +588,7 @@ COMMANDS = [("secimler", "⚽ Günün seçimleri"), ("bugun", "📋 Bugünün t�
             ("karne", "📊 Dünün sonuçları"), ("kupon", "🧾 Kupon değerlendir"), ("sistem", "🧮 Sistem kupon hesabı"),
             ("kuponyap", "🧩 Hedef orana göre kupon"),
             ("oynadim", "📒 Bahsini deftere yaz"), ("defter", "📒 Defterim: kâr/zarar"), ("ayarlar", "⚙️ Bildirim ayarları"),
-            ("menu", "📂 Menüyü göster"), ("nasil", "❓ Nasıl oynanır"), ("dur", "🔕 Bildirimleri kapat"), ("yardim", "ℹ️ Yardım")]
+            ("menu", "📂 Menüyü göster"), ("gizle", "🙈 Alttaki menüyü gizle"), ("nasil", "❓ Nasıl oynanır"), ("dur", "🔕 Bildirimleri kapat"), ("yardim", "ℹ️ Yardım")]
 
 # Giriş alanının altında sürekli duran kategori menüsü (Telegram "reply keyboard"); buton yazısı → komut
 MENU_ROWS = [["⚽ Günün seçimleri", "📋 Tüm maçlar"],

@@ -2,6 +2,7 @@
 import io, os
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib
+import kayit
 
 FONT_DIR = os.path.join(os.path.dirname(matplotlib.__file__), "mpl-data", "fonts", "ttf")
 _fc = {}
@@ -59,6 +60,7 @@ def _header(d, title, sub, fill=HEAD):
 
 
 def _wrap(d, text, font, maxw):
+    text = kayit.temizle(text)  # kayıt modunda talimatlar satırlara bölünmeden önce çıkarılır
     words, lines, cur = text.split(), [], ""
     for w_ in words:
         t = (cur + " " + w_).strip()

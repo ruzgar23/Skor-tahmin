@@ -190,6 +190,8 @@ def handle_commands(st, wait=0):
             elif cmd in ("/menu", "/menü"):
                 st["subs"].setdefault(chat, {})["menu"] = core.MENU_VERSION
                 tg.send(chat, "📂 <b>Menü</b>\nAlttaki butonlardan bir bölüm seç.", reply_markup=core.MENU_KB)
+            elif cmd in ("/gizle", "/menugizle"):
+                tg.send(chat, "🙈 Alttaki menü gizlendi. Geri getirmek için /menu yaz.", reply_markup={"remove_keyboard": True})
             elif cmd in ("/dur", "/stop"):
                 st["subs"].setdefault(chat, {})["on"] = False
                 tg.send(chat, "🔕 Bildirimler kapatıldı. Tekrar açmak için /start.")
