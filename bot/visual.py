@@ -1,6 +1,6 @@
 """Verilerden görsel kartları ve sade metin mesajlarını üretir."""
 from datetime import datetime, timedelta, timezone
-import core, extra, cards
+import core, extra, cards, kayit
 from core import nm, ko_local
 
 AY = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
@@ -118,7 +118,17 @@ def long_images(data, day):
                               "iddaa oranı kartta yazan sınırın altındaysa oynama: piyasa ortalaması oranla bu seçimler %4–10 kaybettirdi."), accent)]
 
 
+HOW_TO_KAYIT = ("<b>Kart nasıl okunur?</b>\n"
+                "• Yeşil şerit <b>GÜÇLÜ</b>, turuncu şerit <b>ORTA</b>: botun ne kadar emin olduğu.\n"
+                "• Yüzde: tahminin tutma ihtimali.\n"
+                "• Sağdaki oran: botun hesapladığı oran sınırı.\n"
+                "• Ertesi sabah dünün karnesi gelir: tutanlar yeşil, yatanlar kırmızı.\n"
+                "<i>Eğitim ve deney amaçlıdır, bahis tavsiyesi değildir. 18 yaş altı için değildir.</i>")
+
+
 def how_to():
+    if kayit.AKTIF:  # video kaydı: oynama talimatı yerine nötr açıklama
+        return HOW_TO_KAYIT
     return ("<b>Nasıl kullanılır?</b>\n"
             "1️⃣ Karttaki maçı iddaa'da bul, <b>OYNA</b> yazan seçime bak.\n"
             "2️⃣ İddaa'nın oranını karttaki <b>≥ oran</b> ile karşılaştır.\n"

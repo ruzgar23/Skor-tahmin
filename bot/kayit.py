@@ -1,8 +1,10 @@
 """Kayıt (video) modu: KAYIT_MODU=1 iken mesajlarda ve kartlarda bahis talimatları gizlenir.
 
 "OYNA:" yerine "TAHMİN:", "OYNAMA:" yerine "İPTAL:" yazılır; birim önerileri ve
-"tekli oyna / kasanın %2'si" gibi oynama talimatları çıkarılır. Olasılıklar, oran
-sınırları, karne ve canlı sonuçlar aynen kalır.
+"tekli oyna / kasanın %2'si" gibi oynama talimatları çıkarılır. Bahis sitesi adları
+(DraftKings vb.) "piyasa" olur; sabah mesajındaki "Nasıl kullanılır?" yerine nötr
+"Kart nasıl okunur?" açıklaması gider (visual.how_to). Olasılıklar, oran sınırları,
+karne ve canlı sonuçlar aynen kalır.
 
 Açmak için: Settings → Secrets and variables → Actions → Variables → KAYIT_MODU = 1
 Kapatmak için değişkeni silmek ya da 0 yapmak yeterli.
@@ -23,6 +25,11 @@ _KURALLAR = [
     (re.compile(r"\s*·\s*(?:1|½|¼|⅛) birim"), ""),
     (re.compile(r"(?:1|½|¼|⅛) birim\b"), ""),
     (re.compile(r" ise oyna, altındaysa geç"), ""),
+    (re.compile(r"\s*Oran, yazan sınırın altındaysa oynama\."), ""),
+    (re.compile(r",\s*oran sınırına (?:mutlaka )?uy\."), "."),
+    (re.compile(r"Oynamaya değmesi için iddaa oranı en az"), "Oran sınırı:"),
+    # bahis sitesi adı görünmesin
+    (re.compile(r"\b(?:DraftKings|Pinnacle|Bet365|bet365|Betfair|Unibet)\b"), "piyasa"),
     (re.compile(r"OYNAMA:"), "İPTAL:"),
     (re.compile(r"OYNA:"), "TAHMİN:"),
     (re.compile(r"Oyna:"), "Tahmin:"),
